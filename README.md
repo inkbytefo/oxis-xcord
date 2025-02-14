@@ -80,9 +80,47 @@ docker-compose up -d --build [service_name]
 
 ## Development
 
-- Frontend is accessible at `frontend/index.html`
+### Frontend Development
+- Development server runs on `http://localhost:5173`
 - Backend API runs on `http://localhost:3000`
 - API health check: `http://localhost:3000/api/health`
+
+### Desktop Application (Tauri)
+To develop the desktop application:
+
+1. Install Rust and system dependencies:
+   ```bash
+   # Windows (via Chocolatey)
+   choco install rust-ms visual-studio-2022-buildtools
+
+   # macOS
+   brew install rust
+
+   # Linux
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   ```
+
+2. Navigate to frontend directory:
+   ```bash
+   cd frontend
+   ```
+
+3. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+4. Run in development mode:
+   ```bash
+   npm run tauri:dev
+   ```
+
+5. Build desktop application:
+   ```bash
+   npm run tauri:build
+   ```
+
+The build output will be available in `frontend/src-tauri/target/release`.
 
 ## CI/CD Pipeline
 
