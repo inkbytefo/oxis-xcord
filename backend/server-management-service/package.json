@@ -1,0 +1,27 @@
+{
+  "name": "server-management-service",
+  "version": "1.0.0",
+  "description": "Server management service for microservices architecture",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^8.0.3",
+    "node-ssh": "^13.1.0",
+    "dockerode": "^4.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "winston": "^3.11.0",
+    "grpc": "^1.24.11",
+    "@grpc/proto-loader": "^0.7.10"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2"
+  }
+}
