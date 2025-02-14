@@ -28,7 +28,7 @@ Bu TODO listesi, XCord projesinin geliştirme süreçlerini yapay zeka ajanları
     **Prompt:** `Backend dizini altında API Gateway, Auth Service, Messaging Service, Voice Service ve Server Management Service olmak üzere 5 temel mikroservis için ayrı dizinler oluştur. Her servis için temel bir Node.js veya Rust projesi başlat ve servisler arası iletişimi (örneğin, gRPC veya REST API) planla. Mikroservis mimarisi yapısını dokümante et.`
     - [+] **TODO:** API Gateway servisini yapay zeka ajanı ile oluştur (Backend).
         **Prompt:** `API Gateway servisi için temel bir Node.js projesi oluştur. Express.js veya Koa.js gibi bir framework kullanarak gelen istekleri ilgili mikroservislere yönlendirecek bir yapı kur. Yük dengeleme ve temel güvenlik önlemlerini (örneğin, rate limiting) API Gateway seviyesinde implemente et.`
-    - [ ] **TODO:** Auth Service servisini yapay zeka ajanı ile oluştur (Backend).
+    - [+] **TODO:** Auth Service servisini yapay zeka ajanı ile oluştur (Backend).
         **Prompt:** `Auth Service servisi için temel bir Node.js projesi oluştur. Kullanıcı kayıt, giriş, çıkış ve token yönetimi (JWT) işlevlerini implemente et. Veritabanı bağlantısını kur ve kullanıcı bilgilerini güvenli bir şekilde saklamak için gerekli önlemleri al.`
     - [ ] **TODO:** Messaging Service servisini yapay zeka ajanı ile oluştur (Backend).
         **Prompt:** `Messaging Service servisi için temel bir Node.js projesi oluştur. WebSocket kullanarak gerçek zamanlı mesajlaşma işlevlerini (mesaj gönderme, alma, geçmişi görüntüleme) implemente et. Mesajları veritabanında sakla ve mesaj güvenliği için gerekli önlemleri al.`
