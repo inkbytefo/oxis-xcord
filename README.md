@@ -1,5 +1,7 @@
 # XCord Project
 
+[![CI/CD Pipeline](https://github.com/inkbytefo/11/actions/workflows/ci.yml/badge.svg)](https://github.com/inkbytefo/11/actions/workflows/ci.yml)
+
 ## Project Structure
 
 ```
@@ -81,6 +83,27 @@ docker-compose up -d --build [service_name]
 - Frontend is accessible at `frontend/index.html`
 - Backend API runs on `http://localhost:3000`
 - API health check: `http://localhost:3000/api/health`
+
+## CI/CD Pipeline
+
+The project uses GitHub Actions for continuous integration and deployment:
+
+- **Frontend Checks:**
+  - Linting with ESLint
+  - Unit tests with Jest
+  
+- **Backend Checks:**
+  - Linting with ESLint
+  - Unit tests with Jest
+  - Docker image build
+
+- **Integration:**
+  - Docker Compose build
+  - Health check verification
+
+The pipeline runs automatically on:
+- Every push to main branch
+- Every pull request to main branch
 
 ## Documentation
 
