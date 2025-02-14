@@ -8,21 +8,21 @@ Bu TODO listesi, XCord projesinin geliştirme süreçlerini yapay zeka ajanları
 
 **Hedef:** Projenin temel altyapısını ve geliştirme ortamını AI ajanları ile kurmak ve doğrulamak.
 
-- [ ] **TODO:** Git repository kurulumunu yapay zeka ajanı ile gerçekleştir.
+- [+] **TODO:** Git repository kurulumunu yapay zeka ajanı ile gerçekleştir.
     **Prompt:** `Yeni bir Git repository oluştur ve XCord projesi için temel proje yapısını kur. Repository'i GitHub veya GitLab gibi bir platformda başlat ve proje yöneticisine erişim yetkilerini tanımla. İlk commit'i gerçekleştirerek temel yapıyı repository'e yükle.`
-- [ ] **TODO:** Temel proje yapısını yapay zeka ajanı ile oluştur.
+- [+ ] **TODO:** Temel proje yapısını yapay zeka ajanı ile oluştur.
     **Prompt:** `XCord projesi için gerekli temel dizin ve dosyaları oluştur. Frontend için 'frontend', backend için 'services', dokümantasyon için 'docs' ve hafıza bankası için 'memory-bank' dizinlerini oluştur. Her dizin içine temel başlangıç dosyalarını (örneğin, frontend için index.html, backend için index.js) yerleştir.`
-- [ ] **TODO:** Geliştirme ortamı (Development environment) kurulumunu yapay zeka ajanı ile sağla.
+- [+ ] **TODO:** Geliştirme ortamı (Development environment) kurulumunu yapay zeka ajanı ile sağla.
     **Prompt:** `XCord projesi için Docker ve Docker Compose kullanarak izole bir geliştirme ortamı oluştur. Frontend, backend ve veritabanı servislerini içeren bir docker-compose.yml dosyası yapılandır. Ortamın hızlı başlatılması ve durdurulması için gerekli komutları ve talimatları dokümante et.`
-- [ ] **TODO:** Sürekli Entegrasyon/Sürekli Dağıtım (CI/CD) pipeline kurulumunu yapay zeka ajanı ile yapılandır.
+- [+ ] **TODO:** Sürekli Entegrasyon/Sürekli Dağıtım (CI/CD) pipeline kurulumunu yapay zeka ajanı ile yapılandır.
     **Prompt:** `GitHub Actions veya GitLab CI/CD kullanarak XCord projesi için temel bir CI/CD pipeline oluştur. Pipeline, kodun her commit veya pull request üzerine otomatik olarak linting, test ve basit bir build aşamasını içermeli. Pipeline konfigürasyonunu proje repository'sine ekle ve pipeline durumunu izlemek için gerekli araçları ayarla.`
-- [ ] **TODO:** React + Tauri proje yapılandırmasını yapay zeka ajanı ile gerçekleştir (Frontend).
+- [+ ] **TODO:** React + Tauri proje yapılandırmasını yapay zeka ajanı ile gerçekleştir (Frontend).
     **Prompt:** `Frontend dizini altında 'create-react-app' veya benzeri bir araç kullanarak temel bir React projesi oluştur. Ardından, Tauri'yi projeye entegre et ve temel bir masaüstü uygulama yapısını hazırla. Projenin build ve geliştirme komutlarını yapılandır ve dokümante et.`
-- [ ] **TODO:** UI component library seçimini yapay zeka ajanı ile yap (Frontend).
+- [+ ] **TODO:** UI component library seçimini yapay zeka ajanı ile yap (Frontend).
     **Prompt:** `XCord projesi frontend'i için Material UI, Ant Design veya Chakra UI gibi popüler bir UI component library seç. Seçilen kütüphanenin avantajlarını ve dezavantajlarını değerlendirerek bir karar ver ve seçimi gerekçeleriyle birlikte dokümante et. Kütüphaneyi projeye dahil et ve temel component'leri deneme amaçlı kullan.`
-- [ ] **TODO:** Temel UI/UX tasarımını yapay zeka ajanı ile oluştur (Frontend).
+- [+ ] **TODO:** Temel UI/UX tasarımını yapay zeka ajanı ile oluştur (Frontend).
     **Prompt:** `Figma, Adobe XD veya Sketch gibi bir araç kullanarak XCord projesi için temel UI/UX tasarımını oluştur. Ana ekranlar, navigasyon yapısı ve temel component'lerin (button, input, chat alanı vb.) tasarımlarını hazırla. Tasarımları proje dokümantasyonuna ekle ve geliştiriciler için erişilebilir hale getir.`
-- [ ] **TODO:** Responsive layout implementasyonunu yapay zeka ajanı ile gerçekleştir (Frontend).
+- [ +] **TODO:** Responsive layout implementasyonunu yapay zeka ajanı ile gerçekleştir (Frontend).
     **Prompt:** `Oluşturulan UI/UX tasarımını temel alarak React projesinde responsive layout yapısını implemente et. CSS Grid veya Flexbox kullanarak farklı ekran boyutlarına (desktop, tablet, mobile) uyumlu bir layout oluştur. Layout'un farklı ekran boyutlarında nasıl göründüğünü test et ve gerekli ayarlamaları yap.`
 - [ ] **TODO:** Mikroservis mimarisi kurulumunu yapay zeka ajanı ile gerçekleştir (Backend).
     **Prompt:** `Backend dizini altında API Gateway, Auth Service, Messaging Service, Voice Service ve Server Management Service olmak üzere 5 temel mikroservis için ayrı dizinler oluştur. Her servis için temel bir Node.js veya Rust projesi başlat ve servisler arası iletişimi (örneğin, gRPC veya REST API) planla. Mikroservis mimarisi yapısını dokümante et.`
