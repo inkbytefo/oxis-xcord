@@ -51,9 +51,46 @@ XCord platformu, mikroservis mimarisi üzerine inşa edilmiştir. Bu mimari, pla
 ### Voice Service (Ses Servisi)
 
 - **Görevleri:**
-    - Ses kanalı yönetimini (oluşturma, yönetme) sağlar.
-    - Gerçek zamanlı sesli iletişimi yönetir.
-    - Ses kalitesi izleme ve iyileştirme süreçlerini yönetir.
+    - Ses kanalı yönetimini (oluşturma, yönetme) sağlar
+    - WebRTC tabanlı peer-to-peer ses iletimini yönetir
+    - Socket.IO ile sinyalleşme sürecini koordine eder
+    - Ses kalitesi optimizasyonunu sağlar
+
+- **WebRTC Altyapısı:**
+    - Peer bağlantı yönetimi (`simple-peer`)
+    - ICE sunucu konfigürasyonu
+    - Ses akışı kontrolü ve yönetimi
+    - Bağlantı durumu izleme
+
+- **Ses Optimizasyonu:**
+    - Echo cancellation (yankı engelleme)
+    - Noise suppression (gürültü bastırma)
+    - Auto gain control (otomatik kazanç kontrolü)
+    - Yüksek kaliteli ses ayarları:
+        - 48kHz sample rate
+        - 16-bit sample size
+        - Mono channel
+
+- **Oda Yönetimi:**
+    - Dinamik oda oluşturma ve yönetme
+    - Kullanıcı katılım/ayrılma takibi
+    - Peer bağlantılarının otomatik yönetimi
+    - Bağlantı kopması durumunda otomatik yeniden bağlanma
+
+- **Veri Akışı:**
+    ```
+    [Kullanıcı Mikrofonları] → [WebRTC Peer Connections]
+           ↑                           ↑
+    [Ses Optimizasyonu]      [Socket.IO Sinyalleşme]
+           ↓                           ↓
+    [Ses Çıkışı] ← [Peer Bağlantı Yönetimi]
+    ```
+
+- **İzleme ve Metrikler:**
+    - WebRTC bağlantı kalitesi
+    - Ses akışı metrikleri
+    - Oda katılımcı sayıları
+    - Bağlantı hataları ve yeniden bağlanma oranları
 
 ## Olay (Event) Sistemi
 

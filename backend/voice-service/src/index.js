@@ -1,191 +1,212 @@
 import express from 'express';
-import { createServer } from 'http';
+import http from 'http';
 import { Server } from 'socket.io';
-import mediasoup from 'mediasoup';
-import Redis from 'redis';
 import cors from 'cors';
-import winston from 'winston';
-
-// Initialize logger
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.json(),
-  transports: [
-    new winston.transports.File({ filename: 'error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'combined.log' })
-  ]
-});
-
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.simple()
-  }));
-}
+import { config } from './config.js';
+import { RoomManager } from './lib/RoomManager.js';
+import { logger } from './utils/logger.js';
 
 const app = express();
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
-});
+const server = http.createServer(app);
 
-const PORT = process.env.PORT || 3003;
-
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Redis connection
-const redisClient = Redis.createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379'
+const io = new Server(server, {
+  cors: {
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
 });
 
-redisClient.on('error', (err) => logger.error('Redis Client Error:', err));
-redisClient.connect().then(() => logger.info('Connected to Redis'));
+const roomManager = new RoomManager();
 
-// MediaSoup setup
-let mediasoupRouter;
+const PORT = process.env.PORT || 3003;
 
-const createMediasoupWorker = async () => {
-  const worker = await mediasoup.createWorker({
-    logLevel: 'warn',
-    logTags: ['info', 'ice', 'dtls', 'rtp', 'srtp', 'rtcp'],
-    rtcMinPort: 40000,
-    rtcMaxPort: 49999,
-  });
+async function handleConnection(socket) {
+  logger.info('New connection', { socketId: socket.id });
 
-  worker.on('died', () => {
-    logger.error('mediasoup worker died, exiting in 2 seconds... [pid:%d]', worker.pid);
-    setTimeout(() => process.exit(1), 2000);
-  });
-
-  const mediaCodecs = [
-    {
-      kind: 'audio',
-      mimeType: 'audio/opus',
-      clockRate: 48000,
-      channels: 2,
-    }
-  ];
-
-  mediasoupRouter = await worker.createRouter({ mediaCodecs });
-  logger.info('MediaSoup worker and router created');
-};
-
-createMediasoupWorker();
-
-// Room management
-const rooms = new Map();
-
-// Socket.IO connection handling
-io.on('connection', async (socket) => {
-  logger.info('New client connected');
-
-  socket.on('join_room', async (roomName) => {
+  socket.on('joinRoom', async ({ roomId, rtpCapabilities }) => {
     try {
-      socket.room = roomName;
-      socket.join(roomName);
-
-      if (!rooms.has(roomName)) {
-        rooms.set(roomName, new Set());
-      }
-      rooms.get(roomName).add(socket.id);
-
-      // Create WebRTC Transport
-      const transport = await mediasoupRouter.createWebRtcTransport({
-        listenIps: [{ ip: '127.0.0.1' }],
-        enableUdp: true,
-        enableTcp: true,
-        preferUdp: true,
+      const room = await roomManager.getOrCreateRoom(roomId);
+      
+      // Add peer to room
+      room.addPeer(socket.id, {
+        id: socket.id,
+        rtpCapabilities
       });
 
-      socket.emit('transport_parameters', {
+      socket.join(roomId);
+      
+      // Notify others in room
+      socket.to(roomId).emit('peerJoined', {
+        peerId: socket.id,
+        rtpCapabilities
+      });
+
+      // Send router RTP capabilities
+      socket.emit('routerCapabilities', {
+        routerRtpCapabilities: room.router.rtpCapabilities
+      });
+
+      logger.info('Peer joined room', {
+        socketId: socket.id,
+        roomId,
+        peersInRoom: room.getPeers().length
+      });
+    } catch (error) {
+      logger.error('Error joining room', { error, socketId: socket.id, roomId });
+      socket.emit('error', { message: 'Could not join room' });
+    }
+  });
+
+  socket.on('createWebRtcTransport', async ({ roomId, consuming }) => {
+    try {
+      const room = await roomManager.getOrCreateRoom(roomId);
+      const transport = await room.createWebRtcTransport(socket);
+
+      socket.emit('webRtcTransportCreated', {
         id: transport.id,
         iceParameters: transport.iceParameters,
         iceCandidates: transport.iceCandidates,
-        dtlsParameters: transport.dtlsParameters,
+        dtlsParameters: transport.dtlsParameters
       });
 
-      socket.transport = transport;
-      logger.info(`Client joined room: ${roomName}`);
+      logger.info('WebRTC transport created', {
+        socketId: socket.id,
+        transportId: transport.id,
+        consuming
+      });
     } catch (error) {
-      logger.error('Error in join_room:', error);
-      socket.emit('error', { message: 'Error joining room' });
+      logger.error('Error creating WebRTC transport', { error, socketId: socket.id });
+      socket.emit('error', { message: 'Could not create WebRTC transport' });
     }
   });
 
-  socket.on('connect_transport', async (dtlsParameters) => {
+  socket.on('connectTransport', async ({ roomId, transportId, dtlsParameters }) => {
     try {
-      await socket.transport.connect({ dtlsParameters });
-      logger.info('Transport connected');
-    } catch (error) {
-      logger.error('Error in connect_transport:', error);
-      socket.emit('error', { message: 'Error connecting transport' });
-    }
-  });
-
-  socket.on('produce', async (kind, rtpParameters) => {
-    try {
-      const producer = await socket.transport.produce({ kind, rtpParameters });
+      const room = await roomManager.getOrCreateRoom(roomId);
+      await room.connectTransport(transportId, dtlsParameters);
       
-      producer.on('transportclose', () => {
-        producer.close();
-      });
-
-      // Notify others in the room
-      socket.to(socket.room).emit('new_producer', {
-        producerId: producer.id,
-        kind: producer.kind,
-      });
-
-      socket.emit('producer_created', { id: producer.id });
-      logger.info(`New ${kind} producer created`);
+      socket.emit('transportConnected');
+      
+      logger.info('Transport connected', { socketId: socket.id, transportId });
     } catch (error) {
-      logger.error('Error in produce:', error);
-      socket.emit('error', { message: 'Error creating producer' });
+      logger.error('Error connecting transport', { error, socketId: socket.id, transportId });
+      socket.emit('error', { message: 'Could not connect transport' });
     }
   });
 
-  socket.on('disconnect', () => {
-    if (socket.room && rooms.has(socket.room)) {
-      rooms.get(socket.room).delete(socket.id);
-      if (rooms.get(socket.room).size === 0) {
-        rooms.delete(socket.room);
+  socket.on('produce', async ({ roomId, transportId, kind, rtpParameters, appData }) => {
+    try {
+      const room = await roomManager.getOrCreateRoom(roomId);
+      const producer = await room.produce(transportId, kind, rtpParameters, appData);
+
+      socket.emit('produced', { id: producer.id });
+
+      // Notify other peers in the room
+      socket.to(roomId).emit('newProducer', {
+        peerId: socket.id,
+        producerId: producer.id,
+        kind,
+        rtpParameters
+      });
+
+      logger.info('New producer', {
+        socketId: socket.id,
+        producerId: producer.id,
+        kind
+      });
+    } catch (error) {
+      logger.error('Error producing', { error, socketId: socket.id });
+      socket.emit('error', { message: 'Could not create producer' });
+    }
+  });
+
+  socket.on('consume', async ({ roomId, transportId, producerId, rtpCapabilities }) => {
+    try {
+      const room = await roomManager.getOrCreateRoom(roomId);
+      const consumer = await room.consume(transportId, producerId, rtpCapabilities);
+
+      socket.emit('consumed', {
+        id: consumer.id,
+        producerId: consumer.producerId,
+        kind: consumer.kind,
+        rtpParameters: consumer.rtpParameters,
+        type: consumer.type,
+        producerPaused: consumer.producerPaused
+      });
+
+      logger.info('New consumer', {
+        socketId: socket.id,
+        consumerId: consumer.id,
+        producerId
+      });
+    } catch (error) {
+      logger.error('Error consuming', { error, socketId: socket.id });
+      socket.emit('error', { message: 'Could not create consumer' });
+    }
+  });
+
+  socket.on('resumeConsumer', async ({ roomId, consumerId }) => {
+    try {
+      const room = await roomManager.getOrCreateRoom(roomId);
+      const consumer = room.consumers.get(consumerId);
+      if (consumer) {
+        await consumer.resume();
+        socket.emit('consumerResumed', { consumerId });
+      }
+    } catch (error) {
+      logger.error('Error resuming consumer', { error, socketId: socket.id, consumerId });
+      socket.emit('error', { message: 'Could not resume consumer' });
+    }
+  });
+
+  socket.on('disconnect', async () => {
+    logger.info('Peer disconnected', { socketId: socket.id });
+    
+    // Clean up peer from all rooms
+    for (const roomId of roomManager.getRoomIds()) {
+      const room = await roomManager.getOrCreateRoom(roomId);
+      if (room.peers.has(socket.id)) {
+        await room.handlePeerLeave(socket.id);
+        socket.to(roomId).emit('peerLeft', { peerId: socket.id });
+        
+        // Close empty rooms
+        if (room.peers.size === 0) {
+          await roomManager.closeRoom(roomId);
+        }
       }
     }
-    if (socket.transport) {
-      socket.transport.close();
-    }
-    logger.info('Client disconnected');
   });
-});
+}
 
-// REST API Routes
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+async function main() {
+  try {
+    await roomManager.init();
+    io.on('connection', handleConnection);
 
-app.get('/api/rooms', (req, res) => {
-  const roomStats = Array.from(rooms.entries()).map(([name, participants]) => ({
-    name,
-    participantCount: participants.size,
-  }));
-  res.json(roomStats);
-});
+    server.listen(PORT, () => {
+      logger.info(`Voice service listening on port ${PORT}`);
+    });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  logger.error('Unhandled error:', err);
-  res.status(500).json({
-    status: 'error',
-    message: 'Internal server error',
-    timestamp: new Date().toISOString()
-  });
-});
+    // Graceful shutdown
+    ['SIGINT', 'SIGTERM'].forEach(signal => {
+      process.on(signal, async () => {
+        logger.info('Shutting down voice service...');
+        await roomManager.close();
+        process.exit(0);
+      });
+    });
 
-// Start server
-httpServer.listen(PORT, () => {
-  logger.info(`Voice service running on port ${PORT}`);
+  } catch (error) {
+    logger.error('Failed to start voice service', { error });
+    process.exit(1);
+  }
+}
+
+main().catch(error => {
+  logger.error('Unhandled error in main', { error });
+  process.exit(1);
 });

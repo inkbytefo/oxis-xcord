@@ -1,274 +1,315 @@
-# Geliştirme Kılavuzu
+# Development Guide
 
-## Proje Yapısı
+## Service Setup
 
-```
-services/
-├── api-gateway/
-├── auth-service/
-├── messaging-service/
-├── server-management/
-├── shared/
-└── voice-service/
-```
+### Prerequisites
+- Node.js 18+ 
+- MongoDB 
+- Redis
+- Docker (optional)
 
-## Servis Geliştirme İlkeleri
+### Environment Setup
+1. Clone the repository
+2. Copy `.env.example` to `.env` in each service directory
+3. Configure environment variables as needed
+4. Install dependencies in each service: `npm install`
 
-### Ortak Kütüphane Kullanımı
+## Running Services
 
-`services/shared` dizini, servisler arası ortak yardımcı araçları ve tipleri içerir:
+### Development Mode
+Each service can be run individually in development mode:
 
-```typescript
-// Olay Tipleri
-const EventTypes = {
-  USER_CREATED: 'USER_CREATED',
-  USER_UPDATED: 'USER_UPDATED',
-  USER_DELETED: 'USER_DELETED',
-  MESSAGE_SENT: 'MESSAGE_SENT',
-  MESSAGE_READ: 'MESSAGE_READ',
-  MESSAGE_DELETED: 'MESSAGE_DELETED',
-  SERVER_CREATED: 'SERVER_CREATED',
-  SERVER_UPDATED: 'SERVER_UPDATED',
-  SERVER_DELETED: 'SERVER_DELETED',
-  VOICE_CALL_STARTED: 'VOICE_CALL_STARTED',
-  VOICE_CALL_ENDED: 'VOICE_CALL_ENDED'
-};
-
-// Olay Arayüzü
-interface Event {
-  type: EventType;
-  data: EventDataMap[EventType];
-  metadata: {
-    timestamp: string;
-    correlationId: string;
-    source: string;
-  };
-}
+```bash
+cd backend/[service-name]
+npm run dev
 ```
 
-### Olay Veriyolu Uygulaması
-
-Servisler arası iletişim için ortak kütüphaneden `EventBus` kullanın:
-
-```typescript
-import { EventBus, EventTypes, Event } from '@xcord/shared';
-
-const eventBus = EventBus.getInstance(config.rabbitmq.url);
-
-// Olay yayınlama
-await eventBus.publish({
-  type: 'MESSAGE_SENT',
-  data: {
-    id: messageId,
-    senderId: userId,
-    content: message
-  },
-  metadata: {
-    timestamp: new Date().toISOString(),
-    correlationId: uuidv4(),
-    source: 'messaging-service'
-  }
-});
-
-// Olaylara abone olma
-eventBus.subscribe('USER_DELETED', async (event: Event) => {
-  // Olayı işle
-}, 'service-name-events');
+### Using Docker
+```bash
+docker-compose up
 ```
 
-### WebSocket Uygulaması
+## Service-Specific Guidelines
 
-Socket yöneticisi uygulama deseni:
+### API Gateway (Port 3000)
+- Entry point for all external requests
+- Configure routes in `src/routes/`
+- Add new service proxies in `src/config.js`
 
-```typescript
-class SocketManager {
-  private io: Server;
-  private connectedSockets: Map<string, Socket>;
+### Auth Service (Port 3001)
+- Handles user authentication
+- JWT token validation
+- User management APIs
+- Configure JWT settings in `.env`
 
-  constructor(io: Server) {
-    this.io = io;
-    this.setupMiddleware();
-    this.setupEventHandlers();
-  }
+### Messaging Service (Port 3002)
 
-  private setupMiddleware(): void {
-    this.io.use(async (socket, next) => {
-      // Socket bağlantısını doğrula
-      try {
-        const token = socket.handshake.auth.token;
-        // Token'ı doğrula
-        next();
-      } catch (error) {
-        next(new Error('Kimlik doğrulama başarısız'));
-      }
-    });
-  }
+#### Setup
+1. Configure environment variables:
+   ```
+   PORT=3002
+   MONGODB_URI=mongodb://localhost:27017/messaging
+   REDIS_URL=redis://localhost:6379
+   ENCRYPTION_KEY=your-32-byte-key
+   AUTH_SERVICE_URL=http://localhost:3001
+   ```
 
-  public async handleConnection(socket: Socket): Promise<void> {
-    // Yeni bağlantıları işle
-    socket.on('message:send', (data) => this.handleMessage(socket, data));
-    socket.on('typing:start', (data) => this.handleTypingStart(socket, data));
-    socket.on('disconnect', () => this.handleDisconnect(socket));
-  }
-}
+2. Start dependencies:
+   ```bash
+   # Start MongoDB
+   mongod
+
+   # Start Redis
+   redis-server
+   ```
+
+#### Features
+- Real-time messaging using WebSocket
+- Message encryption
+- Room-based and direct messaging
+- Message delivery status and read receipts
+
+#### Development Guidelines
+
+1. **WebSocket Events**
+   - Use Socket.IO for real-time communication
+   - Handle events in `socket.on()` handlers
+   - Implement proper error handling
+   - Use rate limiting for message sending
+
+2. **Security**
+   - All messages must be encrypted
+   - Validate user authentication
+   - Implement rate limiting
+   - Sanitize user inputs
+
+3. **Message Storage**
+   - Use MongoDB for persistence
+   - Use Redis for caching
+   - Implement proper indexes
+   - Handle large message volumes
+
+4. **Testing**
+   ```bash
+   # Run tests
+   npm test
+
+   # Test WebSocket connections
+   wscat -c ws://localhost:3002
+   ```
+
+#### Common Tasks
+
+1. Implementing new message types:
+   ```javascript
+   // Add to messageSchema in models
+   // Add validation in middleware
+   // Add handler in socket events
+   ```
+
+2. Adding new API endpoints:
+   ```javascript
+   // Add validation middleware
+   // Add rate limiting
+   // Add route handler
+   // Add error handling
+   ```
+
+3. Monitoring:
+   - Check logs in `error.log` and `combined.log`
+   - Monitor Redis memory usage
+   - Check MongoDB performance
+
+### Voice Service (Port 3003)
+
+#### Setup
+1. Configure environment variables:
+   ```
+   PORT=3003
+   ```
+
+2. Start the service:
+   ```bash
+   cd backend/voice-service
+   npm install
+   npm run dev
+   ```
+
+#### Features
+- Real-time voice communication using WebRTC
+- Peer-to-peer audio streaming
+- Room-based user management
+- Optimized audio quality:
+  - Echo cancellation
+  - Noise suppression
+  - Auto gain control
+  - High-quality audio settings (48kHz, 16-bit)
+
+#### Development Guidelines
+
+1. **WebRTC Integration**
+   - Use Socket.IO for signaling
+   - Handle peer connections with simple-peer
+   - Manage room-based peer groups
+   - Implement proper connection cleanup
+
+2. **Audio Quality**
+   - Configure audio constraints:
+   ```javascript
+   const audioConstraints = {
+     echoCancellation: true,
+     noiseSuppression: true,
+     autoGainControl: true,
+     channelCount: 1,
+     sampleRate: 48000,
+     sampleSize: 16
+   };
+   ```
+   - Monitor audio stream quality
+   - Handle audio device changes
+
+3. **Connection Management**
+   - Handle peer connection states
+   - Implement reconnection logic
+   - Clean up resources on disconnect
+   - Monitor connection quality
+
+4. **Testing Voice Features**
+   ```bash
+   # Run service tests
+   npm test
+
+   # Test WebRTC connection
+   npm run test:webrtc
+
+   # Monitor audio metrics
+   npm run metrics
+   ```
+
+5. **Common Tasks**
+   - Adding new room features:
+   ```javascript
+   // Add room management logic
+   // Handle room events
+   // Implement room state management
+   ```
+   
+   - Implementing audio controls:
+   ```javascript
+   // Add mute/unmute functionality
+   // Handle audio device selection
+   // Implement volume controls
+   ```
+
+6. **Monitoring**
+   - Check WebRTC connection stats
+   - Monitor audio quality metrics
+   - Track room participation
+   - Log connection issues
+
+7. **Security Considerations**
+   - Validate room access
+   - Secure WebRTC connections
+   - Rate limit connection attempts
+   - Implement proper authentication
+
+### Server Management Service (Port 3004)
+- Server provisioning
+- Resource monitoring
+- Configuration management
+
+## Testing
+
+### Unit Tests
+```bash
+npm test
 ```
 
-### İstek Doğrulama
-
-Giriş doğrulaması için `validate-request` ara yazılımını kullanın:
-
-```typescript
-import { body, param, validationResult } from 'express-validator';
-
-const validateRequest = [
-  body('email').isEmail(),
-  body('password').isLength({ min: 6 }),
-  (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    next();
-  }
-];
+### Integration Tests
+```bash
+npm run test:integration
 ```
 
-### Veritabanı Modelleri
-
-Varlık tanımlama deseni:
-
-```typescript
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
-
-@Entity()
-export class Server {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
-  @Column()
-  name: string;
-
-  @Column()
-  ownerId: string;
-
-  @Column('jsonb', { default: [] })
-  members: string[];
-}
+### Load Testing
+```bash
+npm run test:load
 ```
 
-### Hata Yönetimi
+## Common Development Tasks
 
-Standart hata yönetimi deseni:
+### Adding New Features
+1. Create feature branch
+2. Implement changes
+3. Add tests
+4. Update documentation
+5. Create pull request
 
-```typescript
-try {
-  // İşlem mantığı
-} catch (error) {
-  logger.error({ error }, 'İşlem başarısız oldu');
-  if (error instanceof CustomError) {
-    return res.status(error.statusCode).json({ message: error.message });
-  }
-  res.status(500).json({ message: 'İç sunucu hatası' });
-}
-```
+### Debugging
+- Check service logs
+- Use debugging tools
+- Monitor service metrics
+- Check error tracking
 
-## Ortam Yapılandırması
+### Performance Optimization
+- Use profiling tools
+- Monitor database queries
+- Optimize API responses
+- Use caching effectively
 
-Her servis için bir yapılandırma modülü olmalıdır:
+## Best Practices
 
-```typescript
-export const config = {
-  server: {
-    port: process.env.PORT || 3000
-  },
-  database: {
-    host: process.env.DB_HOST,
-    port: parseInt(process.env.DB_PORT || '5432'),
-    username: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
-  },
-  jwt: {
-    secret: process.env.JWT_SECRET,
-    expiresIn: '24h'
-  }
-};
-```
+### Code Style
+- Follow ESLint configuration
+- Use TypeScript types
+- Write clear comments
+- Follow naming conventions
 
-## Test Kılavuzları
+### API Design
+- Use RESTful conventions
+- Document all endpoints
+- Include error responses
+- Version APIs appropriately
 
-### Birim Testleri
+### Security
+- Validate all inputs
+- Use proper authentication
+- Implement rate limiting
+- Follow security best practices
 
-```typescript
-describe('Mesaj Servisi', () => {
-  it('yeni bir mesaj oluşturmalı', async () => {
-    const message = await createMessage({
-      content: 'Test mesajı',
-      senderId: 'user1',
-      roomId: 'room1'
-    });
-    expect(message).toHaveProperty('id');
-    expect(message.content).toBe('Test mesajı');
-  });
-});
-```
+### Logging
+- Use appropriate log levels
+- Include relevant context
+- Monitor error rates
+- Rotate log files
 
-### Entegrasyon Testleri
+## Deployment
 
-```typescript
-describe('Kimlik Doğrulama Akışı', () => {
-  it('kullanıcıyı doğrulamalı ve token döndürmeli', async () => {
-    const response = await request(app)
-      .post('/api/auth/login')
-      .send({
-        email: 'test@example.com',
-        password: 'password123'
-      });
+### Staging
+1. Build services
+2. Run integration tests
+3. Deploy to staging
+4. Verify functionality
 
-    expect(response.status).toBe(200);
-    expect(response.body).toHaveProperty('token');
-  });
-});
-```
+### Production
+1. Create release
+2. Update documentation
+3. Deploy services
+4. Monitor performance
 
-## Geliştirme İş Akışı
+## Troubleshooting
 
-1. Ana daldan özellik dalı oluşturun
-2. Yukarıdaki desenleri izleyerek değişiklikleri uygulayın
-3. Yeni işlevsellik için testler yazın
-4. Gerekirse dokümantasyonu güncelleyin
-5. Çekme isteği gönderin
-6. Kod incelemesi
-7. Ana dala birleştirin
+### Common Issues
+1. Connection errors
+   - Check service availability
+   - Verify network settings
+   - Check credentials
 
-## İzleme ve Günlük Kaydı
+2. Performance issues
+   - Monitor resource usage
+   - Check database queries
+   - Analyze API response times
 
-pino kullanarak günlük kaydı uygulayın:
-
-```typescript
-const logger = pino({
-  name: 'service-name',
-  level: process.env.LOG_LEVEL || 'info'
-});
-
-logger.info({ userId, action }, 'Kullanıcı eylemi gerçekleştirildi');
-logger.error({ error }, 'İşlem başarısız oldu');
-```
-
-## Performans Dikkat Edilmesi Gerekenler
-
-1. Veritabanları için bağlantı havuzu kullanın
-2. Uygun yerlerde önbellekleme uygulayın
-3. Oturum ve gerçek zamanlı veriler için Redis kullanın
-4. Büyük veri kümeleri için sayfalama uygulayın
-5. Veritabanlarında uygun indeksler kullanın
-
-## Güvenlik En İyi Uygulamaları
-
-1. Her zaman kullanıcı girişini doğrulayın
-2. Kimlik doğrulama için JWT kullanın
-3. Hız sınırlaması uygulayın
-4. Tüm bağlantılar için HTTPS/WSS kullanın
-5. En az ayrıcalık ilkesini izleyin
-6. Depolama veya görüntülemeden önce tüm verileri temizleyin
-7. Bağımlılıkları güncel tutun
+3. Authentication problems
+   - Verify JWT tokens
+   - Check service configuration
+   - Validate user credentials

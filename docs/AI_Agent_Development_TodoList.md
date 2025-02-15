@@ -30,9 +30,9 @@ Bu TODO listesi, XCord projesinin geliştirme süreçlerini yapay zeka ajanları
         **Prompt:** `API Gateway servisi için temel bir Node.js projesi oluştur. Express.js veya Koa.js gibi bir framework kullanarak gelen istekleri ilgili mikroservislere yönlendirecek bir yapı kur. Yük dengeleme ve temel güvenlik önlemlerini (örneğin, rate limiting) API Gateway seviyesinde implemente et.`
     - [+] **TODO:** Auth Service servisini yapay zeka ajanı ile oluştur (Backend).
         **Prompt:** `Auth Service servisi için temel bir Node.js projesi oluştur. Kullanıcı kayıt, giriş, çıkış ve token yönetimi (JWT) işlevlerini implemente et. Veritabanı bağlantısını kur ve kullanıcı bilgilerini güvenli bir şekilde saklamak için gerekli önlemleri al.`
-    - [ ] **TODO:** Messaging Service servisini yapay zeka ajanı ile oluştur (Backend).
+    - [+] **TODO:** Messaging Service servisini yapay zeka ajanı ile oluştur (Backend).
         **Prompt:** `Messaging Service servisi için temel bir Node.js projesi oluştur. WebSocket kullanarak gerçek zamanlı mesajlaşma işlevlerini (mesaj gönderme, alma, geçmişi görüntüleme) implemente et. Mesajları veritabanında sakla ve mesaj güvenliği için gerekli önlemleri al.`
-    - [ ] **TODO:** Voice Service servisini yapay zeka ajanı ile oluştur (Backend).
+    - [+] **TODO:** Voice Service servisini yapay zeka ajanı ile oluştur (Backend).
         **Prompt:** `Voice Service servisi için temel bir Node.js projesi oluştur. WebRTC kullanarak sesli iletişim işlevlerini (sesli arama başlatma, ses iletimi, bağlantı yönetimi) implemente et. Ses kalitesini optimize etmek için gerekli teknolojileri (örneğin, noise suppression) araştır ve entegre etmeyi planla.`
     - [ ] **TODO:** Server Management Service servisini yapay zeka ajanı ile oluştur (Backend).
         **Prompt:** `Server Management Service servisi için temel bir Node.js projesi oluştur. Sunucu oluşturma, yönetme, kanal ekleme/çıkarma ve rol tabanlı yetkilendirme işlevlerini implemente et. Sunucu ve kanal verilerini veritabanında sakla ve yönetim arayüzleri için temel API endpoint'lerini oluştur.`

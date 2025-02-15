@@ -24,24 +24,30 @@ const generateTokens = (user) => {
 export const register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
+    logger.debug('Register request received', { username, email });
 
     // Validate password strength
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    logger.debug('Validating password');
     if (!passwordRegex.test(password)) {
+      logger.warn('Password validation failed');
       return res.status(400).json({
         message: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character'
       });
     }
 
     // Check if user exists
+    logger.debug('Checking if user exists');
     const userExists = await User.findOne({ $or: [{ username }, { email }] });
     if (userExists) {
+      logger.warn('User already exists', { existingUser: userExists.username || userExists.email });
       return res.status(400).json({
         message: userExists.username === username ? 'Username is taken' : 'Email is already registered'
       });
     }
 
     // Create new user
+    logger.debug('Creating new user');
     const user = new User({
       username,
       email,
@@ -49,12 +55,15 @@ export const register = async (req, res) => {
       roles: ['user']
     });
 
+    logger.debug('Saving user to database');
     await user.save();
 
+    logger.info('User registered successfully', { username, email });
     res.status(201).json({
       message: 'User registered successfully'
     });
   } catch (error) {
+    logger.error('Error registering user', { error: error.message, stack: error.stack });
     res.status(500).json({
       message: 'Error registering user',
       error: error.message

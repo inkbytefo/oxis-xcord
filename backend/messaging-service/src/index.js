@@ -5,6 +5,9 @@ import mongoose from 'mongoose';
 import Redis from 'redis';
 import cors from 'cors';
 import winston from 'winston';
+import { validateMessage, validateRoom } from './middleware/validate.js';
+import { messageRateLimiter, httpRateLimiter } from './middleware/rate-limiter.js';
+import { MessageEncryption } from './utils/encryption.js';
 
 // Initialize logger
 const logger = winston.createLogger({
@@ -57,19 +60,84 @@ const messageSchema = new mongoose.Schema({
   receiver: { type: String, required: true },
   content: { type: String, required: true },
   room: { type: String, required: false },
-  timestamp: { type: Date, default: Date.now }
+  timestamp: { type: Date, default: Date.now },
+  // Encryption fields
+  iv: { type: String, required: true },
+  encrypted: { type: String, required: true },
+  authTag: { type: String, required: true },
+  // Message status
+  status: {
+    type: String,
+    enum: ['sent', 'delivered', 'read'],
+    default: 'sent'
+  },
+  readBy: [{
+    userId: String,
+    timestamp: Date
+  }],
+  deliveredTo: [{
+    userId: String,
+    timestamp: Date
+  }]
 });
 
 const Message = mongoose.model('Message', messageSchema);
 
+// Authentication middleware for socket connections
+io.use(async (socket, next) => {
+  const token = socket.handshake.auth.token;
+  if (!token) {
+    return next(new Error('Authentication token required'));
+  }
+
+  try {
+    // Verify token with auth service
+    const response = await fetch(`${process.env.AUTH_SERVICE_URL}/verify`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Invalid token');
+    }
+
+    const userData = await response.json();
+    socket.user = userData;
+    next();
+  } catch (error) {
+    return next(new Error('Authentication failed'));
+  }
+});
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-  logger.info('New client connected');
+  logger.info(`User ${socket.user.id} connected`);
 
   // Join a room
-  socket.on('join_room', (room) => {
-    socket.join(room);
-    logger.info(`Client joined room: ${room}`);
+  socket.on('join_room', async (room) => {
+    try {
+      await socket.join(room);
+      logger.info(`User ${socket.user.id} joined room: ${room}`);
+      
+      // Mark messages as delivered
+      await Message.updateMany(
+        { 
+          room,
+          'deliveredTo.userId': { $ne: socket.user.id }
+        },
+        {
+          $push: {
+            deliveredTo: {
+              userId: socket.user.id,
+              timestamp: new Date()
+            }
+          },
+          $set: { status: 'delivered' }
+        }
+      );
+    } catch (error) {
+      logger.error('Error joining room:', error);
+      socket.emit('error', { message: 'Error joining room' });
+    }
   });
 
   // Leave a room
@@ -78,13 +146,23 @@ io.on('connection', (socket) => {
     logger.info(`Client left room: ${room}`);
   });
 
-  // Handle new message
+  // Handle new message with rate limiting and encryption
+  socket.use(messageRateLimiter);
+  
   socket.on('send_message', async (data) => {
     try {
-      const message = new Message({
-        sender: data.sender,
+      // Encrypt message
+      const encryptedData = MessageEncryption.encryptMessage({
+        sender: socket.user.id,
         receiver: data.receiver,
         content: data.content,
+        room: data.room
+      });
+
+      const message = new Message({
+        ...encryptedData,
+        sender: socket.user.id,
+        receiver: data.receiver,
         room: data.room
       });
 
@@ -109,10 +187,107 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Mark message as read
+  socket.on('mark_as_read', async (messageId) => {
+    try {
+      const message = await Message.findById(messageId);
+      
+      if (!message) {
+        return socket.emit('error', { message: 'Message not found' });
+      }
+
+      // Check if user already marked as read
+      if (message.readBy.some(read => read.userId === socket.user.id)) {
+        return;
+      }
+
+      // Update read status
+      await Message.findByIdAndUpdate(messageId, {
+        $push: {
+          readBy: {
+            userId: socket.user.id,
+            timestamp: new Date()
+          }
+        },
+        $set: { status: 'read' }
+      });
+
+      // Notify other users in room
+      if (message.room) {
+        socket.to(message.room).emit('message_read', {
+          messageId,
+          userId: socket.user.id,
+          timestamp: new Date()
+        });
+      } else {
+        // For direct messages, notify only the sender
+        io.to(message.sender).emit('message_read', {
+          messageId,
+          userId: socket.user.id,
+          timestamp: new Date()
+        });
+      }
+    } catch (error) {
+      logger.error('Error marking message as read:', error);
+      socket.emit('error', { message: 'Error updating read status' });
+    }
+  });
+
   // Disconnect handling
   socket.on('disconnect', () => {
-    logger.info('Client disconnected');
+    logger.info(`User ${socket.user.id} disconnected`);
   });
+});
+
+// Mark messages as read (HTTP endpoint)
+app.post('/api/messages/:messageId/read', httpRateLimiter, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const message = await Message.findById(req.params.messageId);
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    // Check if user already marked as read
+    if (message.readBy.some(read => read.userId === userId)) {
+      return res.status(200).json({ status: 'already read' });
+    }
+
+    // Update read status
+    await Message.findByIdAndUpdate(req.params.messageId, {
+      $push: {
+        readBy: {
+          userId: userId,
+          timestamp: new Date()
+        }
+      },
+      $set: { status: 'read' }
+    });
+
+    // Notify users via socket
+    if (message.room) {
+      io.to(message.room).emit('message_read', {
+        messageId: req.params.messageId,
+        userId: userId,
+        timestamp: new Date()
+      });
+    } else {
+      io.to(message.sender).emit('message_read', {
+        messageId: req.params.messageId,
+        userId: userId,
+        timestamp: new Date()
+      });
+    }
+
+    res.json({ status: 'success' });
+  } catch (error) {
+    logger.error('Error marking message as read:', error);
+    res.status(500).json({ error: 'Error updating read status' });
+  }
 });
 
 // REST API Routes
@@ -120,21 +295,53 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Get messages for a room
-app.get('/api/messages/:room', async (req, res) => {
+// Get messages for a room with pagination
+app.get('/api/messages/:room', validateRoom, httpRateLimiter, async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+
     const messages = await Message.find({ room: req.params.room })
       .sort({ timestamp: -1 })
-      .limit(50);
-    res.json(messages);
+      .skip(skip)
+      .limit(limit);
+
+    // Decrypt messages
+    const decryptedMessages = messages.map(msg => {
+      try {
+        const decrypted = MessageEncryption.decryptMessage(msg);
+        return {
+          ...decrypted,
+          id: msg._id,
+          status: msg.status,
+          readBy: msg.readBy,
+          deliveredTo: msg.deliveredTo
+        };
+      } catch (error) {
+        logger.error('Message decryption error:', error);
+        return null;
+      }
+    }).filter(Boolean);
+
+    const total = await Message.countDocuments({ room: req.params.room });
+
+    res.json({
+      messages: decryptedMessages,
+      pagination: {
+        current: page,
+        pages: Math.ceil(total / limit),
+        total
+      }
+    });
   } catch (error) {
     logger.error('Error fetching messages:', error);
     res.status(500).json({ message: 'Error fetching messages' });
   }
 });
 
-// Get direct messages between users
-app.get('/api/messages/direct/:sender/:receiver', async (req, res) => {
+// Get direct messages between users with pagination
+app.get('/api/messages/direct/:sender/:receiver', httpRateLimiter, async (req, res) => {
   try {
     const messages = await Message.find({
       $or: [

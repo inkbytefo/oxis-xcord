@@ -1,131 +1,302 @@
-import {
-  Box,
-  Flex,
-  Heading,
-  IconButton,
-  useColorMode,
-  Text,
-  Button,
-  Input
-} from '@chakra-ui/react';
-import { SunIcon, MoonIcon, HamburgerIcon } from '@chakra-ui/icons';
-import { useState } from 'react';
-import ChatMessage from './ChatMessage';
+import React, { useState, useEffect, useRef } from 'react';
+import * as mediasoupClient from 'mediasoup-client';
+import { 
+  RouterCapabilities,
+  TransportParameters,
+  ProducerDetails,
+  PeerInfo,
+  createSocket,
+  SocketIO
+} from './types/mediasoup';
+import './App.css';
+
+const SERVER_URL = 'http://localhost:3003';
+const ROOM_ID = 'test-room';
+
+interface DeviceState {
+  loaded: boolean;
+  device: mediasoupClient.Device | null;
+  producing: boolean;
+  consuming: boolean;
+  producerId: string | null;
+  consumers: Map<string, mediasoupClient.types.Consumer>;
+}
 
 function App() {
-  const { colorMode, toggleColorMode } = useColorMode();
-  const [showSidebar, setShowSidebar] = useState(false);
-  const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<{ message: string; user: string; isCurrentUser?: boolean }[]>([]);
+  const socketRef = useRef<SocketIO | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [deviceState, setDeviceState] = useState<DeviceState>({
+    loaded: false,
+    device: null,
+    producing: false,
+    consuming: false,
+    producerId: null,
+    consumers: new Map()
+  });
+  const producerTransportRef = useRef<mediasoupClient.types.Transport | null>(null);
+  const consumerTransportRef = useRef<mediasoupClient.types.Transport | null>(null);
+
+  useEffect(() => {
+    const socket = createSocket(SERVER_URL);
+    socketRef.current = socket;
+    
+    socket.on('connect', () => {
+      console.log('Connected to server');
+      setIsConnected(true);
+    });
+
+    socket.on('disconnect', () => {
+      console.log('Disconnected from server');
+      setIsConnected(false);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!isConnected || !socket) return;
+
+    const initializeDevice = async () => {
+      try {
+        const device = new mediasoupClient.Device();
+        
+        // Join the room and get router RTP capabilities
+        socket.emit('joinRoom', { roomId: ROOM_ID });
+        
+        socket.on('routerCapabilities', async (data: RouterCapabilities) => {
+          await device.load({ routerRtpCapabilities: data.routerRtpCapabilities });
+          setDeviceState(prev => ({ ...prev, loaded: true, device }));
+          await createSendTransport();
+        });
+
+        socket.on('webRtcTransportCreated', async (params: TransportParameters) => {
+          if (params.consuming) {
+            await handleConsumerTransportCreated(params, device);
+          } else {
+            await handleProducerTransportCreated(params, device);
+          }
+        });
+
+        socket.on('newProducer', async (params: ProducerDetails) => {
+          await consumeStream(params.producerId, params.kind, params.rtpParameters);
+        });
+
+        socket.on('peerLeft', (params: PeerInfo) => {
+          handlePeerLeave(params.peerId);
+        });
+
+      } catch (error) {
+        console.error('Failed to initialize device:', error);
+      }
+    };
+
+    initializeDevice();
+
+    // Cleanup event listeners when component unmounts or socket changes
+    return () => {
+      socket.removeAllListeners('routerCapabilities');
+      socket.removeAllListeners('webRtcTransportCreated');
+      socket.removeAllListeners('newProducer');
+      socket.removeAllListeners('peerLeft');
+    };
+  }, [isConnected]);
+
+  const createSendTransport = () => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    socket.emit('createWebRtcTransport', {
+      roomId: ROOM_ID,
+      consuming: false
+    });
+  };
+
+  const handleProducerTransportCreated = async (
+    params: TransportParameters,
+    device: mediasoupClient.Device
+  ) => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    try {
+      const transport = device.createSendTransport({
+        id: params.id,
+        iceParameters: params.iceParameters,
+        iceCandidates: params.iceCandidates,
+        dtlsParameters: params.dtlsParameters
+      });
+
+      transport.on('connect', ({ dtlsParameters }, callback) => {
+        socket.emit('connectTransport', {
+          roomId: ROOM_ID,
+          transportId: transport.id,
+          dtlsParameters
+        });
+        callback();
+      });
+
+      transport.on('produce', async ({ kind, rtpParameters, appData }, callback) => {
+        try {
+          socket.emit('produce', {
+            roomId: ROOM_ID,
+            transportId: transport.id,
+            kind,
+            rtpParameters,
+            appData
+          });
+
+          socket.once('produced', ({ id }: { id: string }) => {
+            callback({ id });
+          });
+        } catch (error) {
+          console.error('Failed to produce:', error);
+        }
+      });
+
+      producerTransportRef.current = transport;
+      await startStreaming(transport);
+
+    } catch (error) {
+      console.error('Failed to create send transport:', error);
+    }
+  };
+
+  const handleConsumerTransportCreated = async (
+    params: TransportParameters,
+    device: mediasoupClient.Device
+  ) => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    try {
+      const transport = device.createRecvTransport({
+        id: params.id,
+        iceParameters: params.iceParameters,
+        iceCandidates: params.iceCandidates,
+        dtlsParameters: params.dtlsParameters
+      });
+
+      transport.on('connect', ({ dtlsParameters }, callback) => {
+        socket.emit('connectTransport', {
+          roomId: ROOM_ID,
+          transportId: transport.id,
+          dtlsParameters
+        });
+        callback();
+      });
+
+      consumerTransportRef.current = transport;
+
+    } catch (error) {
+      console.error('Failed to create receive transport:', error);
+    }
+  };
+
+  const startStreaming = async (transport: mediasoupClient.types.Transport) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 2,
+          sampleRate: 48000,
+          sampleSize: 16
+        } as MediaTrackConstraints,
+        video: false
+      });
+
+      const track = stream.getAudioTracks()[0];
+      const producer = await transport.produce({
+        track,
+        codecOptions: {
+          opusStereo: true,
+          opusDtx: true
+        }
+      });
+
+      setDeviceState(prev => ({
+        ...prev,
+        producing: true,
+        producerId: producer.id
+      }));
+
+      producer.on('trackended', () => {
+        console.log('Track ended');
+      });
+
+    } catch (error) {
+      console.error('Failed to start streaming:', error);
+    }
+  };
+
+  const consumeStream = async (
+    producerId: string,
+    kind: mediasoupClient.types.MediaKind,
+    rtpParameters: mediasoupClient.types.RtpParameters
+  ) => {
+    const socket = socketRef.current;
+    if (!socket || !consumerTransportRef.current || !deviceState.device) return;
+
+    try {
+      const consumer = await consumerTransportRef.current.consume({
+        id: producerId,
+        producerId,
+        kind,
+        rtpParameters
+      });
+
+      const mediaStream = new MediaStream();
+      mediaStream.addTrack(consumer.track);
+
+      const audioElement = new Audio();
+      audioElement.srcObject = mediaStream;
+      audioElement.play().catch(console.error);
+
+      setDeviceState(prev => {
+        const newConsumers = new Map(prev.consumers);
+        newConsumers.set(producerId, consumer);
+        return { ...prev, consumers: newConsumers, consuming: true };
+      });
+
+      socket.emit('resumeConsumer', {
+        roomId: ROOM_ID,
+        consumerId: consumer.id
+      });
+
+    } catch (error) {
+      console.error('Failed to consume stream:', error);
+    }
+  };
+
+  const handlePeerLeave = (peerId: string) => {
+    setDeviceState(prev => {
+      const newConsumers = new Map(prev.consumers);
+      for (const [producerId, consumer] of newConsumers) {
+        if ((consumer.appData as { peerId?: string }).peerId === peerId) {
+          consumer.close();
+          newConsumers.delete(producerId);
+        }
+      }
+      return { ...prev, consumers: newConsumers };
+    });
+  };
 
   return (
-    <Flex h="100vh" overflow="hidden">
-      {/* Sidebar */}
-      <Box
-        w={{ base: '240px', lg: '280px' }}
-        bg={colorMode === 'light' ? 'gray.100' : 'gray.800'}
-        p={4}
-        display={{ base: showSidebar ? 'block' : 'none', md: 'block' }}
-        position={{ base: 'fixed', md: 'static' }}
-        h="100vh"
-        zIndex={20}
-        borderRight="1px"
-        borderColor={colorMode === 'light' ? 'gray.200' : 'gray.700'}
-        transition="all 0.2s"
-      >
-        <Heading size="md">Channels</Heading>
-        {/* Placeholder for channel list */}
-        <Box mt={4}>
-          <Button variant="ghost" justifyContent="flex-start" width="100%">#general</Button>
-          <Button variant="ghost" justifyContent="flex-start" width="100%">#random</Button>
-          <Button variant="ghost" justifyContent="flex-start" width="100%">#projects</Button>
-        </Box>
-      </Box>
-
-      {/* Main Content Area */}
-      <Flex 
-        direction="column" 
-        flex="1"
-        ml={{ base: 0, md: '240px', lg: '280px' }}
-        transition="margin 0.2s"
-      >
-        {/* Top Navigation */}
-        <Flex
-          as="header"
-          p={{ base: 2, md: 4 }}
-          bg={colorMode === 'light' ? 'white' : 'gray.800'}
-          borderBottom="1px solid"
-          borderColor={colorMode === 'light' ? 'gray.200' : 'gray.700'}
-          align="center"
-          position="sticky"
-          top={0}
-          zIndex={10}
-        >
-          <IconButton
-            aria-label="Open sidebar"
-            icon={<HamburgerIcon />}
-            onClick={() => setShowSidebar(!showSidebar)}
-            display={{ base: 'block', md: 'none' }}
-            mr={2}
-          />
-          <Heading size="md">XCord</Heading>
-          <IconButton
-            aria-label="Toggle color mode"
-            icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
-            onClick={toggleColorMode}
-            ml="auto"
-            variant="ghost"
-          />
-        </Flex>
-
-        {/* Chat Area */}
-        <Box 
-          flex="1" 
-          p={{ base: 2, md: 4 }} 
-          bg={colorMode === 'light' ? 'gray.50' : 'gray.900'} 
-          overflowY="auto"
-        >
-          <Flex direction="column" maxW="container.md" mx="auto" h="full">
-            {messages.map((msg, index) => (
-              <ChatMessage key={index} message={msg.message} user={msg.user} isCurrentUser={msg.isCurrentUser} />
-            ))}
-          </Flex>
-        </Box>
-
-        {/* Message Input */}
-        <Flex 
-          p={{ base: 2, md: 4 }} 
-          bg={colorMode === 'light' ? 'white' : 'gray.800'}
-          borderTop="1px solid"
-          borderColor={colorMode === 'light' ? 'gray.200' : 'gray.700'}
-          maxW="container.md"
-          mx="auto"
-          w="full"
-        >
-          <Input
-            placeholder="Type a message..."
-            mr={2}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            bg={colorMode === 'light' ? 'white' : 'gray.700'}
-            _placeholder={{ color: colorMode === 'light' ? 'gray.500' : 'gray.400' }}
-          />
-          <Button 
-            colorScheme="blue" 
-            onClick={sendMessage}
-            px={6}
-          >
-            Send
-          </Button>
-        </Flex>
-      </Flex>
-    </Flex>
+    <div className="App">
+      <h1>Voice Chat Room</h1>
+      <div className="status">
+        <p>Connection: {isConnected ? 'Connected' : 'Disconnected'}</p>
+        <p>Device Loaded: {deviceState.loaded ? 'Yes' : 'No'}</p>
+        <p>Producing: {deviceState.producing ? 'Yes' : 'No'}</p>
+        <p>Consuming: {deviceState.consuming ? 'Yes' : 'No'}</p>
+        <p>Active Consumers: {deviceState.consumers.size}</p>
+      </div>
+    </div>
   );
-
-  function sendMessage() {
-    setMessages([...messages, { message: message, user: 'Me', isCurrentUser: true }]);
-    setMessage('');
-  }
 }
 
 export default App;
