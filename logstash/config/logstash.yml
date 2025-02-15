@@ -1,0 +1,10 @@
+http.host: "0.0.0.0"
+xpack.monitoring.enabled: false
+
+pipeline.ordered: auto
+pipeline.workers: 2
+
+queue.type: memory
+queue.max_bytes: 1024mb
+
+log.level: info

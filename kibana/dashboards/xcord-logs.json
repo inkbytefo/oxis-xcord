@@ -1,0 +1,284 @@
+{
+  "version": 1,
+  "timeRestore": false,
+  "title": "XCord Logs",
+  "panels": [
+    {
+      "type": "lens",
+      "title": "Hata Oranları",
+      "gridData": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 12,
+        "i": "1"
+      },
+      "id": "1",
+      "panelIndex": 1,
+      "embeddableConfig": {
+        "showLegend": true,
+        "legendPosition": "right",
+        "filter": {
+          "query": "",
+          "language": "kuery"
+        },
+        "indexPattern": "xcord-logs-*",
+        "series": [
+          {
+            "metrics": [
+              {
+                "type": "count"
+              }
+            ],
+            "split": {
+              "type": "terms",
+              "field": "level",
+              "row": false,
+              "limit": 5,
+              "orderBy": "count",
+              "order": "desc"
+            }
+          }
+        ],
+        "yAxis": {
+          "scale": "linear",
+          "show": true,
+          "label": "Count"
+        },
+        "xAxis": {
+          "scale": "time",
+          "show": true,
+          "label": "Time"
+        },
+        "timeRange": {
+          "from": "now-15m",
+          "to": "now"
+        },
+        "filterByTime": true,
+        "seriesParams": [
+          {
+            "showCircles": true,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "circleSize": 5,
+            "lineType": "line",
+            "fill": 0
+          }
+        ],
+        "legend": {
+          "show": true,
+          "position": "right"
+        }
+      }
+    },
+    {
+      "type": "lens",
+      "title": "HTTP İstekleri",
+      "gridData": {
+        "x": 0,
+        "y": 12,
+        "w": 24,
+        "h": 12,
+        "i": "2"
+      },
+      "id": "2",
+      "panelIndex": 2,
+      "embeddableConfig": {
+        "showLegend": true,
+        "legendPosition": "right",
+        "filter": {
+          "query": "",
+          "language": "kuery"
+        },
+        "indexPattern": "xcord-logs-*",
+        "series": [
+          {
+            "metrics": [
+              {
+                "type": "count"
+              }
+            ],
+            "split": {
+              "type": "terms",
+              "field": "method",
+              "row": false,
+              "limit": 5,
+              "orderBy": "count",
+              "order": "desc"
+            }
+          }
+        ],
+        "yAxis": {
+          "scale": "linear",
+          "show": true,
+          "label": "Count"
+        },
+        "xAxis": {
+          "scale": "time",
+          "show": true,
+          "label": "Time"
+        },
+        "timeRange": {
+          "from": "now-15m",
+          "to": "now"
+        },
+        "filterByTime": true,
+        "seriesParams": [
+          {
+            "showCircles": true,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "circleSize": 5,
+            "lineType": "line",
+            "fill": 0
+          }
+        ],
+        "legend": {
+          "show": true,
+          "position": "right"
+        }
+      }
+    },
+    {
+      "type": "lens",
+      "title": "Servis Logları",
+      "gridData": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 12,
+        "i": "3"
+      },
+      "id": "3",
+      "panelIndex": 3,
+      "embeddableConfig": {
+        "showLegend": true,
+        "legendPosition": "right",
+        "filter": {
+          "query": "",
+          "language": "kuery"
+        },
+        "indexPattern": "xcord-logs-*",
+        "series": [
+          {
+            "metrics": [
+              {
+                "type": "count"
+              }
+            ],
+            "split": {
+              "type": "terms",
+              "field": "service",
+              "row": false,
+              "limit": 5,
+              "orderBy": "count",
+              "order": "desc"
+            }
+          }
+        ],
+        "yAxis": {
+          "scale": "linear",
+          "show": true,
+          "label": "Count"
+        },
+        "xAxis": {
+          "scale": "time",
+          "show": true,
+          "label": "Time"
+        },
+        "timeRange": {
+          "from": "now-15m",
+          "to": "now"
+        },
+        "filterByTime": true,
+        "seriesParams": [
+          {
+            "showCircles": true,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "circleSize": 5,
+            "lineType": "line",
+            "fill": 0
+          }
+        ],
+        "legend": {
+          "show": true,
+          "position": "right"
+        }
+      }
+    },
+    {
+      "type": "lens",
+      "title": "WebRTC ve MediaSoup Olayları",
+      "gridData": {
+        "x": 0,
+        "y": 36,
+        "w": 24,
+        "h": 12,
+        "i": "4"
+      },
+      "id": "4",
+      "panelIndex": 4,
+      "embeddableConfig": {
+        "showLegend": true,
+        "legendPosition": "right",
+        "filter": {
+          "query": "category:webrtc OR category:mediasoup OR category:room",
+          "language": "kuery"
+        },
+        "indexPattern": "xcord-logs-*",
+        "series": [
+          {
+            "metrics": [
+              {
+                "type": "count"
+              }
+            ],
+            "split": {
+              "type": "terms",
+              "field": "event",
+              "row": false,
+              "limit": 10,
+              "orderBy": "count",
+              "order": "desc"
+            }
+          }
+        ],
+        "yAxis": {
+          "scale": "linear",
+          "show": true,
+          "label": "Count"
+        },
+        "xAxis": {
+          "scale": "time",
+          "show": true,
+          "label": "Time"
+        },
+        "timeRange": {
+          "from": "now-15m",
+          "to": "now"
+        },
+        "filterByTime": true,
+        "seriesParams": [
+          {
+            "showCircles": true,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "circleSize": 5,
+            "lineType": "line",
+            "fill": 0
+          }
+        ],
+        "legend": {
+          "show": true,
+          "position": "right"
+        }
+      }
+    }
+  ],
+  "options": {
+    "useMargins": true,
+    "hidePanelTitles": false
+  },
+  "description": "XCord uygulaması için log görselleştirme dashboard'u. Bu dashboard, hata oranları, HTTP istekleri, servis logları ve WebRTC/MediaSoup olaylarını takip etmeye olanak sağlar."
+}

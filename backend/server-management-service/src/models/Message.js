@@ -1,18 +1,23 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 const User = require('./User');
+const Channel = require('./Channel');
 
-const Server = sequelize.define('Server', {
-  server_id: {
+const Message = sequelize.define('Message', {
+  message_id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true,
   },
-  server_name: {
-    type: DataTypes.STRING,
+  channel_id: {
+    type: DataTypes.INTEGER,
     allowNull: false,
+    references: {
+      model: Channel,
+      key: 'channel_id',
+    },
   },
-  owner_id: {
+  sender_id: {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
@@ -20,22 +25,20 @@ const Server = sequelize.define('Server', {
       key: 'user_id',
     },
   },
-  icon_url: {
+  content: {
     type: DataTypes.TEXT,
+    allowNull: false,
   },
-  created_at: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
-  },
-  updated_at: {
+  sent_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
   },
 }, {
-  tableName: 'servers',
+  tableName: 'messages',
   timestamps: false,
 });
 
-Server.belongsTo(User, { foreignKey: 'owner_id' });
+Message.belongsTo(Channel, { foreignKey: 'channel_id' });
+Message.belongsTo(User, { foreignKey: 'sender_id' });
 
-module.exports = Server;
+module.exports = Message;

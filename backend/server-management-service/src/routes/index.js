@@ -19,7 +19,5 @@ router.get('/servers/:serverId/channels', channelController.listChannels);
 router.get('/servers/:serverId/channels/:channelId', channelController.getChannel);
 router.put('/servers/:serverId/channels/:channelId', channelController.updateChannel);
 router.delete('/servers/:serverId/channels/:channelId', channelController.deleteChannel);
-router.put('/servers/:serverId/channels/:channelId/permissions', channelController.updateChannelPermissions);
-router.get('/servers/:serverId/channels/:channelId/permissions', channelController.checkPermission);
 
 export default router;

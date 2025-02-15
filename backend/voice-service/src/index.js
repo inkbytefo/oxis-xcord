@@ -1,212 +1,260 @@
 import express from 'express';
 import http from 'http';
-import { Server } from 'socket.io';
 import cors from 'cors';
-import { config } from './config.js';
-import { RoomManager } from './lib/RoomManager.js';
-import { logger } from './utils/logger.js';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import VoiceManager from './websocket/voiceManager.js';
+import config from './config.js';
+import { Worker } from 'mediasoup';
+import prometheus from 'prom-client';
+import logger, {
+  loggerMiddleware,
+  webrtcLogger,
+  mediasoupLogger,
+  roomLogger
+} from './utils/logger.js';
+
+// Prometheus metriklerini ayarla
+const collectDefaultMetrics = prometheus.collectDefaultMetrics;
+collectDefaultMetrics({ prefix: 'voice_' });
+
+// Özel metrikler
+const activeRoomsGauge = new prometheus.Gauge({
+  name: 'voice_active_rooms',
+  help: 'Aktif ses odası sayısı'
+});
+
+const activeConnectionsGauge = new prometheus.Gauge({
+  name: 'voice_active_connections',
+  help: 'Aktif WebSocket bağlantı sayısı'
+});
+
+const mediasoupWorkersGauge = new prometheus.Gauge({
+  name: 'voice_mediasoup_workers',
+  help: 'Aktif MediaSoup worker sayısı'
+});
+
+const webrtcConnectionsGauge = new prometheus.Gauge({
+  name: 'voice_webrtc_connections',
+  help: 'Aktif WebRTC bağlantı sayısı'
+});
+
+const errorCounter = new prometheus.Counter({
+  name: 'voice_errors_total',
+  help: 'Toplam hata sayısı',
+  labelNames: ['type']
+});
+
+const httpRequestDuration = new prometheus.Histogram({
+  name: 'voice_http_request_duration_seconds',
+  help: 'HTTP isteği süre metrikleri',
+  labelNames: ['method', 'route', 'status_code']
+});
 
 const app = express();
 const server = http.createServer(app);
 
-app.use(cors());
+// Güvenlik middleware'leri
+app.use(helmet());
+app.use(cors({
+  origin: config.corsOrigin,
+  credentials: true
+}));
 app.use(express.json());
 
-const io = new Server(server, {
-  cors: {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
-    methods: ['GET', 'POST'],
-    credentials: true
+// HTTP istek sürelerini ölç
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    httpRequestDuration.observe(
+      {
+        method: req.method,
+        route: req.route?.path || req.path,
+        status_code: res.statusCode
+      },
+      duration / 1000
+    );
+  });
+  next();
+});
+
+// Logging middleware'i
+app.use(loggerMiddleware);
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 dakika
+  max: 100
+});
+app.use(limiter);
+
+// Voice WebSocket yöneticisini başlat
+const voiceManager = new VoiceManager(server);
+
+// WebSocket metrikleri
+voiceManager.on('connection', () => {
+  activeConnectionsGauge.inc();
+  logger.info('WebSocket client connected');
+});
+voiceManager.on('disconnect', () => {
+  activeConnectionsGauge.dec();
+  logger.info('WebSocket client disconnected');
+});
+
+// Oda metrikleri
+voiceManager.on('roomCreated', (roomId) => {
+  activeRoomsGauge.inc();
+  roomLogger.info(roomId, 'roomCreated');
+});
+voiceManager.on('roomClosed', (roomId) => {
+  activeRoomsGauge.dec();
+  roomLogger.info(roomId, 'roomClosed');
+});
+
+// WebRTC metrikleri
+voiceManager.on('webrtcConnected', (roomId, peerId) => {
+  webrtcConnectionsGauge.inc();
+  webrtcLogger.info('webrtcConnected', { roomId, peerId });
+});
+voiceManager.on('webrtcDisconnected', (roomId, peerId) => {
+  webrtcConnectionsGauge.dec();
+  webrtcLogger.info('webrtcDisconnected', { roomId, peerId });
+});
+
+// MediaSoup worker'ları başlat
+const workers = new Map();
+const numWorkers = Object.keys(require('os').cpus()).length;
+
+async function createWorkers() {
+  for (let i = 0; i < numWorkers; i++) {
+    const worker = await Worker.createWorker({
+      logLevel: config.environment === 'development' ? 'debug' : 'error',
+      logTags: ['info', 'ice', 'dtls', 'rtp', 'srtp', 'rtcp'],
+      rtcMinPort: 40000,
+      rtcMaxPort: 49999
+    });
+
+    worker.on('died', () => {
+      console.error(`MediaSoup worker ${i} öldü, yeniden başlatılıyor...`);
+      mediasoupWorkersGauge.dec();
+      errorCounter.inc({ type: 'worker_died' });
+      mediasoupLogger.error(i, 'workerDied');
+      createWorker(i);
+    });
+
+    workers.set(i, worker);
+    mediasoupWorkersGauge.inc();
+    mediasoupLogger.info(i, 'workerCreated');
+    console.log(`MediaSoup worker ${i} başlatıldı`);
+  }
+}
+
+// Metrics endpoint'i
+app.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', prometheus.register.contentType);
+    res.end(await prometheus.register.metrics());
+  } catch (err) {
+    logger.error('Metrics endpoint error', { error: err });
+    res.status(500).end(err);
   }
 });
 
-const roomManager = new RoomManager();
+// Health check endpoint'i
+app.get('/health', (req, res) => {
+  const status = {
+    service: 'OK',
+    workers: workers.size,
+    timestamp: new Date().toISOString()
+  };
+  logger.debug('Health check completed');
+  res.status(200).json(status);
+});
 
-const PORT = process.env.PORT || 3003;
+// WebSocket ve MediaSoup durumu endpoint'i
+app.get('/status', (req, res) => {
+  const status = {
+    connections: voiceManager.connections.size,
+    activeRooms: voiceManager.rooms.getRoomCount(),
+    workers: workers.size,
+    uptime: process.uptime()
+  };
+  logger.info('Status check', { status });
+  res.status(200).json(status);
+});
 
-async function handleConnection(socket) {
-  logger.info('New connection', { socketId: socket.id });
-
-  socket.on('joinRoom', async ({ roomId, rtpCapabilities }) => {
-    try {
-      const room = await roomManager.getOrCreateRoom(roomId);
-      
-      // Add peer to room
-      room.addPeer(socket.id, {
-        id: socket.id,
-        rtpCapabilities
-      });
-
-      socket.join(roomId);
-      
-      // Notify others in room
-      socket.to(roomId).emit('peerJoined', {
-        peerId: socket.id,
-        rtpCapabilities
-      });
-
-      // Send router RTP capabilities
-      socket.emit('routerCapabilities', {
-        routerRtpCapabilities: room.router.rtpCapabilities
-      });
-
-      logger.info('Peer joined room', {
-        socketId: socket.id,
-        roomId,
-        peersInRoom: room.getPeers().length
-      });
-    } catch (error) {
-      logger.error('Error joining room', { error, socketId: socket.id, roomId });
-      socket.emit('error', { message: 'Could not join room' });
+// Hata yönetimi
+app.use((err, req, res, next) => {
+  errorCounter.inc({ type: err.name || 'unknown' });
+  logger.error('Application error', {
+    error: {
+      message: err.message,
+      stack: err.stack,
+      name: err.name
     }
   });
-
-  socket.on('createWebRtcTransport', async ({ roomId, consuming }) => {
-    try {
-      const room = await roomManager.getOrCreateRoom(roomId);
-      const transport = await room.createWebRtcTransport(socket);
-
-      socket.emit('webRtcTransportCreated', {
-        id: transport.id,
-        iceParameters: transport.iceParameters,
-        iceCandidates: transport.iceCandidates,
-        dtlsParameters: transport.dtlsParameters
-      });
-
-      logger.info('WebRTC transport created', {
-        socketId: socket.id,
-        transportId: transport.id,
-        consuming
-      });
-    } catch (error) {
-      logger.error('Error creating WebRTC transport', { error, socketId: socket.id });
-      socket.emit('error', { message: 'Could not create WebRTC transport' });
-    }
+  res.status(500).json({ 
+    error: 'Sunucu hatası',
+    message: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
+});
 
-  socket.on('connectTransport', async ({ roomId, transportId, dtlsParameters }) => {
-    try {
-      const room = await roomManager.getOrCreateRoom(roomId);
-      await room.connectTransport(transportId, dtlsParameters);
-      
-      socket.emit('transportConnected');
-      
-      logger.info('Transport connected', { socketId: socket.id, transportId });
-    } catch (error) {
-      logger.error('Error connecting transport', { error, socketId: socket.id, transportId });
-      socket.emit('error', { message: 'Could not connect transport' });
-    }
-  });
+const PORT = config.port || 3003;
 
-  socket.on('produce', async ({ roomId, transportId, kind, rtpParameters, appData }) => {
-    try {
-      const room = await roomManager.getOrCreateRoom(roomId);
-      const producer = await room.produce(transportId, kind, rtpParameters, appData);
-
-      socket.emit('produced', { id: producer.id });
-
-      // Notify other peers in the room
-      socket.to(roomId).emit('newProducer', {
-        peerId: socket.id,
-        producerId: producer.id,
-        kind,
-        rtpParameters
-      });
-
-      logger.info('New producer', {
-        socketId: socket.id,
-        producerId: producer.id,
-        kind
-      });
-    } catch (error) {
-      logger.error('Error producing', { error, socketId: socket.id });
-      socket.emit('error', { message: 'Could not create producer' });
-    }
-  });
-
-  socket.on('consume', async ({ roomId, transportId, producerId, rtpCapabilities }) => {
-    try {
-      const room = await roomManager.getOrCreateRoom(roomId);
-      const consumer = await room.consume(transportId, producerId, rtpCapabilities);
-
-      socket.emit('consumed', {
-        id: consumer.id,
-        producerId: consumer.producerId,
-        kind: consumer.kind,
-        rtpParameters: consumer.rtpParameters,
-        type: consumer.type,
-        producerPaused: consumer.producerPaused
-      });
-
-      logger.info('New consumer', {
-        socketId: socket.id,
-        consumerId: consumer.id,
-        producerId
-      });
-    } catch (error) {
-      logger.error('Error consuming', { error, socketId: socket.id });
-      socket.emit('error', { message: 'Could not create consumer' });
-    }
-  });
-
-  socket.on('resumeConsumer', async ({ roomId, consumerId }) => {
-    try {
-      const room = await roomManager.getOrCreateRoom(roomId);
-      const consumer = room.consumers.get(consumerId);
-      if (consumer) {
-        await consumer.resume();
-        socket.emit('consumerResumed', { consumerId });
-      }
-    } catch (error) {
-      logger.error('Error resuming consumer', { error, socketId: socket.id, consumerId });
-      socket.emit('error', { message: 'Could not resume consumer' });
-    }
-  });
-
-  socket.on('disconnect', async () => {
-    logger.info('Peer disconnected', { socketId: socket.id });
-    
-    // Clean up peer from all rooms
-    for (const roomId of roomManager.getRoomIds()) {
-      const room = await roomManager.getOrCreateRoom(roomId);
-      if (room.peers.has(socket.id)) {
-        await room.handlePeerLeave(socket.id);
-        socket.to(roomId).emit('peerLeft', { peerId: socket.id });
-        
-        // Close empty rooms
-        if (room.peers.size === 0) {
-          await roomManager.closeRoom(roomId);
-        }
-      }
-    }
-  });
-}
-
-async function main() {
+async function startServer() {
   try {
-    await roomManager.init();
-    io.on('connection', handleConnection);
+    await createWorkers();
 
     server.listen(PORT, () => {
-      logger.info(`Voice service listening on port ${PORT}`);
-    });
-
-    // Graceful shutdown
-    ['SIGINT', 'SIGTERM'].forEach(signal => {
-      process.on(signal, async () => {
-        logger.info('Shutting down voice service...');
-        await roomManager.close();
-        process.exit(0);
+      logger.info(`Voice Service başlatıldı`, {
+        port: PORT,
+        environment: process.env.NODE_ENV,
+        corsOrigin: config.corsOrigin
       });
     });
-
   } catch (error) {
-    logger.error('Failed to start voice service', { error });
+    console.error('Sunucu başlatma hatası:', error);
+    errorCounter.inc({ type: 'startup_error' });
+    logger.error('Sunucu başlatma hatası', { error });
     process.exit(1);
   }
 }
 
-main().catch(error => {
-  logger.error('Unhandled error in main', { error });
+startServer();
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM sinyali alındı. Sunucu kapatılıyor...');
+  
+  // MediaSoup worker'ları kapat
+  for (const [_, worker] of workers) {
+    worker.close();
+    mediasoupWorkersGauge.dec();
+  }
+
+  server.close(() => {
+    logger.info('Sunucu kapatıldı');
+    process.exit(0);
+  });
+});
+
+// Beklenmeyen hataları yakala
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Yakalanmamış Promise Reddi', {
+    error: reason,
+    promise: promise
+  });
+  errorCounter.inc({ type: 'unhandled_rejection' });
+});
+
+process.on('uncaughtException', (error) => {
+  logger.error('Yakalanmamış Hata', {
+    error: {
+      message: error.message,
+      stack: error.stack
+    }
+  });
+  errorCounter.inc({ type: 'uncaught_exception' });
   process.exit(1);
 });

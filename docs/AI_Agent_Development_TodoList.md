@@ -34,21 +34,21 @@ Bu TODO listesi, XCord projesinin geliştirme süreçlerini yapay zeka ajanları
         **Prompt:** `Messaging Service servisi için temel bir Node.js projesi oluştur. WebSocket kullanarak gerçek zamanlı mesajlaşma işlevlerini (mesaj gönderme, alma, geçmişi görüntüleme) implemente et. Mesajları veritabanında sakla ve mesaj güvenliği için gerekli önlemleri al.`
     - [+] **TODO:** Voice Service servisini yapay zeka ajanı ile oluştur (Backend).
         **Prompt:** `Voice Service servisi için temel bir Node.js projesi oluştur. WebRTC kullanarak sesli iletişim işlevlerini (sesli arama başlatma, ses iletimi, bağlantı yönetimi) implemente et. Ses kalitesini optimize etmek için gerekli teknolojileri (örneğin, noise suppression) araştır ve entegre etmeyi planla.`
-    - [ ] **TODO:** Server Management Service servisini yapay zeka ajanı ile oluştur (Backend).
+    - [+] **TODO:** Server Management Service servisini yapay zeka ajanı ile oluştur (Backend).
         **Prompt:** `Server Management Service servisi için temel bir Node.js projesi oluştur. Sunucu oluşturma, yönetme, kanal ekleme/çıkarma ve rol tabanlı yetkilendirme işlevlerini implemente et. Sunucu ve kanal verilerini veritabanında sakla ve yönetim arayüzleri için temel API endpoint'lerini oluştur.`
-- [ ] **TODO:** Veritabanı şema tasarımını yapay zeka ajanı ile gerçekleştir (Backend).
+- [+] **TODO:** Veritabanı şema tasarımını yapay zeka ajanı ile gerçekleştir (Backend).
     **Prompt:** `XCord projesi için PostgreSQL veya MongoDB gibi uygun bir veritabanı teknolojisi seç. Kullanıcılar, sunucular, kanallar, mesajlar ve roller gibi temel veri modellerini tanımla ve veritabanı şemasını oluştur. Şema tasarımını dokümante et ve veritabanı bağlantı bilgilerini güvenli bir şekilde yönetmeyi planla.`
-- [ ] **TODO:** API Gateway implementasyonunu yapay zeka ajanı ile tamamla (Backend).
+- [+] **TODO:** API Gateway implementasyonunu yapay zeka ajanı ile tamamla (Backend).
     **Prompt:** `API Gateway servisinde Auth Service, Messaging Service, Voice Service ve Server Management Service servislerine yönlendirme kurallarını tanımla. Her servis için gerekli API endpoint'lerini API Gateway üzerinden erişilebilir hale getir. API Gateway seviyesinde kimlik doğrulama ve yetkilendirme kontrollerini (JWT doğrulama) implemente et.`
-- [ ] **TODO:** WebSocket altyapısını yapay zeka ajanı ile kur (Backend).
+- [+] **TODO:** WebSocket altyapısını yapay zeka ajanı ile kur (Backend).
     **Prompt:** `Messaging Service ve Voice Service servisleri için WebSocket altyapısını (Socket.IO veya WebSocket kütüphaneleri) kur. Kullanıcı bağlantılarını yönetme, mesajları gerçek zamanlı iletme ve yayınlama/abone olma (publish/subscribe) mekanizmalarını implemente et. WebSocket bağlantı güvenliğini (WSS) yapılandır ve ölçeklenebilirlik için gerekli önlemleri planla.`
-- [ ] **TODO:** Monitoring araçları kurulumunu yapay zeka ajanı ile yap (DevOps).
+- [+] **TODO:** Monitoring araçları kurulumunu yapay zeka ajanı ile yap (DevOps).
     **Prompt:** `Prometheus ve Grafana kullanarak XCord projesi için temel monitoring altyapısını kur. CPU kullanımı, bellek kullanımı, yanıt süreleri ve hata oranları gibi temel sistem ve uygulama metriklerini toplamaya başla. Grafana üzerinde temel dashboard'lar oluşturarak metrikleri görselleştir ve izlemeyi kolaylaştır.`
-- [ ] **TODO:** Logging altyapısını yapay zeka ajanı ile kur (DevOps).
+- [+] **TODO:** Logging altyapısını yapay zeka ajanı ile kur (DevOps).
     **Prompt:** `ELK Stack (Elasticsearch, Logstash, Kibana) veya benzeri bir araç kullanarak XCord projesi için merkezi bir logging altyapısı kur. Uygulama loglarını (backend ve frontend servislerinden) topla, işle ve Elasticsearch üzerinde indeksle. Kibana üzerinde logları arama, filtreleme ve analiz etmeyi sağlayacak dashboard'lar oluştur.`
-- [ ] **TODO:** Docker containerization sürecini yapay zeka ajanı ile tamamla (DevOps).
+- [+] **TODO:** Docker containerization sürecini yapay zeka ajanı ile tamamla (DevOps).
     **Prompt:** `Frontend ve backend servisleri için Dockerfile'lar oluşturarak container imajlarını yapılandır. Docker Compose kullanarak tüm servisleri bir arada ayağa kaldıracak ve yönetecek bir yapı oluştur. Docker imajlarını Docker Hub veya benzeri bir registry'ye push etmeyi planla.`
-- [ ] **TODO:** Kubernetes cluster kurulumunu yapay zeka ajanı ile doğrula (DevOps).
+- [+] **TODO:** Kubernetes cluster kurulumunu yapay zeka ajanı ile doğrula (DevOps).
     **Prompt:** `Önceden kurulmuş Kubernetes cluster'ın (minikube, kind veya cloud tabanlı bir cluster) XCord projesi için uygun şekilde çalıştığını doğrula. kubectl komut satırı aracını kullanarak cluster'a erişimi test et ve temel Kubernetes component'lerinin (node, pod, service, deployment) sağlıklı çalıştığını kontrol et. Kubernetes cluster erişim bilgilerini ve kullanım talimatlarını dokümante et.`
 
 ### Faz 2: Temel Özellikler Geliştirme (2-4 ay)

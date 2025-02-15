@@ -332,3 +332,107 @@ Hassas bilgilerin (API anahtarları, veritabanı şifreleri vb.) güvenli yönet
 - Hızlı kurtarma (quick recovery)
 - İletişim planı (communication plan)
 - Post-mortem analizi (olay sonrası analiz)
+
+## Kubernetes Kümesi Doğrulama
+
+Bu bölümde, XCord projesi için kullanılan Kubernetes kümesinin doğrulanması ve erişim bilgileri yer almaktadır.
+
+**Küme Erişimi:**
+
+Kubernetes kümesine erişmek için `kubectl` komut satırı aracı kullanılır. Küme bilgileri aşağıdaki komutla alınabilir:
+
+```bash
+kubectl cluster-info
+```
+
+**Çıktı:**
+
+```
+Kubernetes control plane is running at https://kubernetes.docker.internal:6443
+CoreDNS is running at https://kubernetes.docker.internal:6443/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+
+To further debug and diagnose cluster problems use 'kubectl cluster-info dump'.
+```
+
+Bu çıktı, Kubernetes kontrol düzleminin ve CoreDNS'in çalıştığını doğrular.
+
+**Düğümlerin Kontrolü:**
+
+Kümedeki düğümlerin durumu aşağıdaki komutla kontrol edilir:
+
+```bash
+kubectl get nodes
+```
+
+**Çıktı:**
+
+```
+NAME             STATUS   ROLES           AGE   VERSION
+docker-desktop   Ready    control-plane   12d   v1.31.4
+```
+
+Bu çıktı, "docker-desktop" adında tek bir düğümün "Ready" durumunda olduğunu gösterir.
+
+**Pod'ların Kontrolü:**
+
+Tüm ad alanlarındaki pod'ların durumu aşağıdaki komutla kontrol edilir:
+
+```bash
+kubectl get pods -A
+```
+
+**Çıktı:**
+
+```
+NAMESPACE     NAME                                     READY   STATUS    RESTARTS        AGE
+kube-system   coredns-7c65d6cfc9-ds6wb                 1/1     Running   21 (120m ago)   12d
+kube-system   coredns-7c65d6cfc9-srskl                 1/1     Running   21 (120m ago)   12d
+kube-system   etcd-docker-desktop                      1/1     Running   21 (120m ago)   12d
+kube-system   kube-apiserver-docker-desktop            1/1     Running   21 (120m ago)   12d
+kube-system   kube-controller-manager-docker-desktop   1/1     Running   21 (120m ago)   12d
+kube-system   kube-proxy-d8nds                         1/1     Running   21 (120m ago)   12d
+kube-system   kube-scheduler-docker-desktop            1/1     Running   23 (22m ago)    12d
+kube-system   storage-provisioner                      1/1     Running   44 (22m ago)    12d
+kube-system   vpnkit-controller                        1/1     Running   21 (120m ago)   12d
+```
+
+Tüm pod'lar "Running" durumundadır.
+
+**Hizmetlerin Kontrolü:**
+
+Tüm ad alanlarındaki hizmetlerin durumu aşağıdaki komutla kontrol edilir:
+
+```bash
+kubectl get services -A
+```
+
+**Çıktı:**
+
+```
+NAMESPACE     NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)                  AGE
+default       kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP                  12d
+kube-system   kube-dns     ClusterIP   10.96.0.10   <none>        53/UDP,53/TCP,9153/TCP   12d
+```
+
+`kubernetes` ve `kube-dns` hizmetleri `ClusterIP` tipinde ve çalışır durumdadır.
+
+**Dağıtımların Kontrolü:**
+
+Tüm ad alanlarındaki dağıtımların durumu aşağıdaki komutla kontrol edilir:
+
+```bash
+kubectl get deployments -A
+```
+
+**Çıktı:**
+
+```
+NAMESPACE     NAME      READY   UP-TO-DATE   AVAILABLE   AGE
+kube-system   coredns   2/2     2            2           12d
+```
+
+`kube-system` ad alanındaki `coredns` dağıtımı 2/2 hazır pod'a sahiptir, güncel ve kullanılabilir durumdadır.
+
+**Sonuç:**
+
+Yapılan kontroller sonucunda, Kubernetes kümesinin temel bileşenlerinin (düğümler, pod'lar, hizmetler, dağıtımlar) sağlıklı çalıştığı doğrulanmıştır.

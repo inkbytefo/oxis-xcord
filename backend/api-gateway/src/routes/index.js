@@ -1,70 +1,72 @@
-import express from 'express';
-import { circuitBreakers } from '../middleware/circuit-breaker.js';
-import { config } from '../config.js';
+const express = require('express');
+const { createProxyMiddleware } = require('http-proxy-middleware');
+const { verifyToken } = require('../middleware/auth');
+const config = require('../config');
 
 const router = express.Router();
 
-// Auth Service Routes
-router.use('/auth', async (req, res, next) => {
-  const breaker = circuitBreakers.auth;
-  await breaker.middleware('/api' + req.url)(req, res, next);
-});
+// Auth Service routes - Public endpoints
+router.use(config.SERVICES.AUTH.PREFIX, createProxyMiddleware({
+  target: config.SERVICES.AUTH.URL,
+  changeOrigin: true,
+  pathRewrite: {
+    [`^${config.SERVICES.AUTH.PREFIX}`]: '',
+  },
+}));
 
-// Messaging Service Routes
-router.use('/messaging', async (req, res, next) => {
-  const breaker = circuitBreakers.messaging;
-  await breaker.middleware('/api' + req.url)(req, res, next);
-});
-
-// Voice Service Routes
-router.use('/voice', async (req, res, next) => {
-  const breaker = circuitBreakers.voice;
-  await breaker.middleware('/api' + req.url)(req, res, next);
-});
-
-// Server Management Service Routes
-router.use('/server', async (req, res, next) => {
-  const breaker = circuitBreakers.serverManagement;
-  await breaker.middleware('/api' + req.url)(req, res, next);
-});
-
-// Health check endpoint
-router.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    services: {
-      auth: circuitBreakers.auth.getBreaker('/health').stats,
-      messaging: circuitBreakers.messaging.getBreaker('/health').stats,
-      voice: circuitBreakers.voice.getBreaker('/health').stats,
-      serverManagement: circuitBreakers.serverManagement.getBreaker('/health').stats
+// Messaging Service routes - Protected endpoints
+router.use(config.SERVICES.MESSAGING.PREFIX, 
+  verifyToken,
+  createProxyMiddleware({
+    target: config.SERVICES.MESSAGING.URL,
+    changeOrigin: true,
+    pathRewrite: {
+      [`^${config.SERVICES.MESSAGING.PREFIX}`]: '',
     },
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Service discovery endpoint
-router.get('/services', (req, res) => {
-  res.json({
-    services: {
-      auth: {
-        url: config.services.auth,
-        status: 'active'
-      },
-      messaging: {
-        url: config.services.messaging,
-        status: 'active'
-      },
-      voice: {
-        url: config.services.voice,
-        status: 'active'
-      },
-      serverManagement: {
-        url: config.services.serverManagement,
-        status: 'active'
+    onProxyReq: (proxyReq, req) => {
+      if (req.user) {
+        proxyReq.setHeader('X-User-Id', req.user.id);
+        proxyReq.setHeader('X-User-Role', req.user.role);
       }
-    },
-    timestamp: new Date().toISOString()
-  });
-});
+    }
+  })
+);
 
-export default router;
+// Voice Service routes - Protected endpoints
+router.use(config.SERVICES.VOICE.PREFIX,
+  verifyToken,
+  createProxyMiddleware({
+    target: config.SERVICES.VOICE.URL,
+    changeOrigin: true,
+    pathRewrite: {
+      [`^${config.SERVICES.VOICE.PREFIX}`]: '',
+    },
+    ws: true, // WebSocket desteği
+    onProxyReq: (proxyReq, req) => {
+      if (req.user) {
+        proxyReq.setHeader('X-User-Id', req.user.id);
+        proxyReq.setHeader('X-User-Role', req.user.role);
+      }
+    }
+  })
+);
+
+// Server Management Service routes - Protected endpoints
+router.use(config.SERVICES.SERVER_MANAGEMENT.PREFIX,
+  verifyToken,
+  createProxyMiddleware({
+    target: config.SERVICES.SERVER_MANAGEMENT.URL,
+    changeOrigin: true,
+    pathRewrite: {
+      [`^${config.SERVICES.SERVER_MANAGEMENT.PREFIX}`]: '',
+    },
+    onProxyReq: (proxyReq, req) => {
+      if (req.user) {
+        proxyReq.setHeader('X-User-Id', req.user.id);
+        proxyReq.setHeader('X-User-Role', req.user.role);
+      }
+    }
+  })
+);
+
+module.exports = router;

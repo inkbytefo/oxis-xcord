@@ -39,7 +39,7 @@ class TCPTransport extends Transport {
     if (this.client && this.client.writable) {
       const logEntry = {
         ...info,
-        service: 'voice-service',
+        service: 'messaging-service',
         environment: process.env.NODE_ENV,
         timestamp: new Date().toISOString()
       };
@@ -62,7 +62,7 @@ const logFormat = winston.format.combine(
 const logger = winston.createLogger({
   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
   format: logFormat,
-  defaultMeta: { service: 'voice-service' },
+  defaultMeta: { service: 'messaging-service' },
   transports: [
     // Konsol transport'u
     new winston.transports.Console({
@@ -99,69 +99,18 @@ export const loggerMiddleware = (req, res, next) => {
   next();
 };
 
-// WebRTC olayları için özel logger
-export const webrtcLogger = {
+// WebSocket olayları için özel logger
+export const socketLogger = {
   info: (event, data) => {
-    logger.info('WebRTC Event', {
-      event,
-      ...data,
-      category: 'webrtc'
-    });
+    logger.info('WebSocket Event', { event, ...data });
   },
   error: (event, error) => {
-    logger.error('WebRTC Error', {
+    logger.error('WebSocket Error', {
       event,
       error: {
         message: error.message,
         stack: error.stack
-      },
-      category: 'webrtc'
-    });
-  }
-};
-
-// MediaSoup worker'ları için özel logger
-export const mediasoupLogger = {
-  info: (workerId, event, data = {}) => {
-    logger.info('MediaSoup Event', {
-      workerId,
-      event,
-      ...data,
-      category: 'mediasoup'
-    });
-  },
-  error: (workerId, event, error) => {
-    logger.error('MediaSoup Error', {
-      workerId,
-      event,
-      error: {
-        message: error.message,
-        stack: error.stack
-      },
-      category: 'mediasoup'
-    });
-  }
-};
-
-// Oda yönetimi için özel logger
-export const roomLogger = {
-  info: (roomId, event, data = {}) => {
-    logger.info('Room Event', {
-      roomId,
-      event,
-      ...data,
-      category: 'room'
-    });
-  },
-  error: (roomId, event, error) => {
-    logger.error('Room Error', {
-      roomId,
-      event,
-      error: {
-        message: error.message,
-        stack: error.stack
-      },
-      category: 'room'
+      }
     });
   }
 };

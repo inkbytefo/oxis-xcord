@@ -1,30 +1,27 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
-const Server = require('./Server');
 
-const Channel = sequelize.define('Channel', {
-  channel_id: {
+const User = sequelize.define('User', {
+  user_id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true,
   },
-  server_id: {
-    type: DataTypes.INTEGER,
+  username: {
+    type: DataTypes.STRING,
     allowNull: false,
-    references: {
-      model: Server,
-      key: 'server_id',
-    },
+    unique: true,
   },
-  channel_name: {
+  email: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true,
+  },
+  password_hash: {
     type: DataTypes.STRING,
     allowNull: false,
   },
-  channel_type: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  topic: {
+  avatar_url: {
     type: DataTypes.TEXT,
   },
   created_at: {
@@ -36,10 +33,8 @@ const Channel = sequelize.define('Channel', {
     defaultValue: DataTypes.NOW,
   },
 }, {
-  tableName: 'channels',
-  timestamps: false,
+  tableName: 'users',
+  timestamps: false, // We're managing timestamps manually
 });
 
-Channel.belongsTo(Server, { foreignKey: 'server_id' });
-
-module.exports = Channel;
+module.exports = User;

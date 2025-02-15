@@ -6,35 +6,101 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "8080:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - "80:80"
     depends_on:
-      - backend
-    environment:
-      - NODE_ENV=development
+      - api-gateway
     networks:
       - xcord-network
 
-  backend:
+  api-gateway:
     build:
-      context: ./services
+      context: ./backend/api-gateway
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    volumes:
-      - ./services:/app
-      - /app/node_modules
-    depends_on:
-      - db
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
+      - AUTH_SERVICE_URL=http://auth-service:3002
+      - MESSAGING_SERVICE_URL=http://messaging-service:3001
+      - VOICE_SERVICE_URL=http://voice-service:3003
+      - SERVER_MANAGEMENT_URL=http://server-management-service:3004
+    depends_on:
+      - auth-service
+      - messaging-service
+      - voice-service
+      - server-management-service
+    networks:
+      - xcord-network
+
+  auth-service:
+    build:
+      context: ./backend/auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=xcord_db
       - DB_USER=postgres
-      - DB_PASSWORD=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key}
+    depends_on:
+      - db
+    networks:
+      - xcord-network
+
+  messaging-service:
+    build:
+      context: ./backend/messaging-service
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=xcord_db
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+    depends_on:
+      - db
+      - logstash
+    networks:
+      - xcord-network
+
+  voice-service:
+    build:
+      context: ./backend/voice-service
+      dockerfile: Dockerfile
+    ports:
+      - "3003:3003"
+      - "10000-10100:10000-10100/udp"
+    environment:
+      - NODE_ENV=production
+      - MEDIASOUP_LISTEN_IP=0.0.0.0
+      - MEDIASOUP_ANNOUNCED_IP=${MEDIASOUP_ANNOUNCED_IP:-127.0.0.1}
+    depends_on:
+      - logstash
+    networks:
+      - xcord-network
+
+  server-management-service:
+    build:
+      context: ./backend/server-management-service
+      dockerfile: Dockerfile
+    ports:
+      - "3004:3004"
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=xcord_db
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+    depends_on:
+      - db
     networks:
       - xcord-network
 
@@ -47,12 +113,89 @@ services:
     environment:
       - POSTGRES_DB=xcord_db
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+    networks:
+      - xcord-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - xcord-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    networks:
+      - xcord-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.1
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    networks:
+      - xcord-network
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.12.1
+    ports:
+      - "5044:5044"
+      - "5000:5000/tcp"
+      - "5000:5000/udp"
+      - "9600:9600"
+    volumes:
+      - ./logstash/config:/usr/share/logstash/config
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+    environment:
+      - "LS_JAVA_OPTS=-Xms256m -Xmx256m"
+    depends_on:
+      - elasticsearch
+    networks:
+      - xcord-network
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.1
+    ports:
+      - "5601:5601"
+    volumes:
+      - ./kibana/dashboards:/usr/share/kibana/dashboards
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
     networks:
       - xcord-network
 
 volumes:
   postgres_data:
+  prometheus_data:
+  grafana_data:
+  elasticsearch_data:
 
 networks:
   xcord-network:

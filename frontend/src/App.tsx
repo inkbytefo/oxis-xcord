@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as mediasoupClient from 'mediasoup-client';
-import { 
+import logger from './utils/logger';
+import {
   RouterCapabilities,
   TransportParameters,
   ProducerDetails,
@@ -41,12 +42,12 @@ function App() {
     socketRef.current = socket;
     
     socket.on('connect', () => {
-      console.log('Connected to server');
+      logger.info('Connected to server');
       setIsConnected(true);
     });
 
     socket.on('disconnect', () => {
-      console.log('Disconnected from server');
+      logger.info('Disconnected from server');
       setIsConnected(false);
     });
 
@@ -89,7 +90,7 @@ function App() {
         });
 
       } catch (error) {
-        console.error('Failed to initialize device:', error);
+        logger.error('Failed to initialize device:', error);
       }
     };
 
@@ -152,7 +153,7 @@ function App() {
             callback({ id });
           });
         } catch (error) {
-          console.error('Failed to produce:', error);
+          logger.error('Failed to produce:', error);
         }
       });
 
@@ -160,7 +161,7 @@ function App() {
       await startStreaming(transport);
 
     } catch (error) {
-      console.error('Failed to create send transport:', error);
+      logger.error('Failed to create send transport:', error);
     }
   };
 
@@ -191,7 +192,7 @@ function App() {
       consumerTransportRef.current = transport;
 
     } catch (error) {
-      console.error('Failed to create receive transport:', error);
+      logger.error('Failed to create receive transport:', error);
     }
   };
 
@@ -225,11 +226,11 @@ function App() {
       }));
 
       producer.on('trackended', () => {
-        console.log('Track ended');
+        logger.info('Track ended');
       });
 
     } catch (error) {
-      console.error('Failed to start streaming:', error);
+      logger.error('Failed to start streaming:', error);
     }
   };
 
@@ -254,7 +255,7 @@ function App() {
 
       const audioElement = new Audio();
       audioElement.srcObject = mediaStream;
-      audioElement.play().catch(console.error);
+      audioElement.play().catch((error) => logger.error('Failed to play audio:', error));
 
       setDeviceState(prev => {
         const newConsumers = new Map(prev.consumers);
@@ -268,7 +269,7 @@ function App() {
       });
 
     } catch (error) {
-      console.error('Failed to consume stream:', error);
+      logger.error('Failed to consume stream:', error);
     }
   };
 
