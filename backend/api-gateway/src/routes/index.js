@@ -1,7 +1,7 @@
-const express = require('express');
-const { createProxyMiddleware } = require('http-proxy-middleware');
-const { verifyToken } = require('../middleware/auth');
-const config = require('../config');
+import express from 'express';
+import { createProxyMiddleware } from 'http-proxy-middleware';
+import { verifyToken } from '../middleware/auth.js';
+import config from '../config.js';
 
 const router = express.Router();
 
@@ -69,4 +69,4 @@ router.use(config.SERVICES.SERVER_MANAGEMENT.PREFIX,
   })
 );
 
-module.exports = router;
+export default router;

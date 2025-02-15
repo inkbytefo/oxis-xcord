@@ -1,7 +1,7 @@
-const jwt = require('jsonwebtoken');
-const config = require('../config');
+import jwt from 'jsonwebtoken';
+import config from '../config.js';
 
-const verifyToken = (req, res, next) => {
+export const verifyToken = (req, res, next) => {
   const token = req.headers['authorization']?.split(' ')[1];
 
   if (!token) {
@@ -17,7 +17,7 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-const checkRole = (roles) => {
+export const checkRole = (roles) => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ message: 'Yetkilendirme gerekli' });
@@ -30,5 +30,3 @@ const checkRole = (roles) => {
     next();
   };
 };
-
-module.exports = { verifyToken, checkRole };

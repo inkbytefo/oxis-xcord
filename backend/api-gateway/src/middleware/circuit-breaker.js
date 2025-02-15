@@ -1,5 +1,5 @@
 import CircuitBreaker from 'opossum';
-import { config } from '../config.js';
+import config from '../config.js';
 
 const defaultOptions = {
   timeout: config.circuitBreaker.requestTimeout,
@@ -87,8 +87,13 @@ export class ServiceCircuitBreaker {
 
 // Create circuit breakers for each service
 export const circuitBreakers = {
-  auth: new ServiceCircuitBreaker(config.services.auth),
-  messaging: new ServiceCircuitBreaker(config.services.messaging),
-  voice: new ServiceCircuitBreaker(config.services.voice),
-  serverManagement: new ServiceCircuitBreaker(config.services.serverManagement)
+  auth: new ServiceCircuitBreaker(config.SERVICES.AUTH.URL),
+  messaging: new ServiceCircuitBreaker(config.SERVICES.MESSAGING.URL),
+  voice: new ServiceCircuitBreaker(config.SERVICES.VOICE.URL),
+  serverManagement: new ServiceCircuitBreaker(config.SERVICES.SERVER_MANAGEMENT.URL)
+};
+
+export const circuitBreaker = (req, res, next) => {
+  // Default middleware implementation
+  next();
 };

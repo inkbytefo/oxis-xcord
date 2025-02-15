@@ -1,11 +1,11 @@
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const routes = require('./routes');
-const config = require('./config');
-const errorHandler = require('./middleware/error-handler');
-const circuitBreaker = require('./middleware/circuit-breaker');
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import routes from './routes/index.js';
+import config from './config.js';
+import { errorHandler } from './middleware/error-handler.js';
+import { circuitBreaker } from './middleware/circuit-breaker.js';
 
 const app = express();
 

@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 import jwt from 'jsonwebtoken';
-import config from '../config';
-import { RoomManager } from '../lib/RoomManager';
+import config from '../config.js';
+import { RoomManager } from '../lib/RoomManager.js';
 
 class VoiceManager {
   constructor(server) {

@@ -1,4 +1,6 @@
-export const config = {
+const config = {
+  port: process.env.PORT || 3003,
+  jwtSecret: process.env.JWT_SECRET || 'your-secret-key',
   mediasoup: {
     worker: {
       rtcMinPort: 40000,
@@ -46,3 +48,5 @@ export const config = {
     }
   }
 };
+
+export default config;

@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   PORT: process.env.PORT || 3000,
   JWT_SECRET: process.env.JWT_SECRET || 'your-secret-key',
   
@@ -26,5 +26,12 @@ module.exports = {
   RATE_LIMIT: {
     WINDOW_MS: 15 * 60 * 1000, // 15 dakika
     MAX_REQUESTS: 100
+  },
+
+  // Circuit breaker ayarları
+  circuitBreaker: {
+    requestTimeout: 3000,
+    errorThresholdPercentage: 50,
+    resetTimeout: 30000
   }
 };
