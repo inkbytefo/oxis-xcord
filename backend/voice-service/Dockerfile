@@ -3,7 +3,7 @@ FROM node:20-alpine
 # MediaSoup ve WebRTC için gerekli paketleri yükle
 RUN apk add --no-cache \
     python3 \
-    python3-pip \
+    py3-pip \
     make \
     g++ \
     linux-headers \
