@@ -73,18 +73,18 @@ export const register = async (req, res) => {
 
 export const login = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { email, password } = req.body;
 
-    // Find user
-    const user = await User.findOne({ username });
+    // Find user by email instead of username
+    const user = await User.findOne({ email });
     if (!user || !user.isActive) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ message: 'Geçersiz e-posta veya şifre' });
     }
 
     // Verify password
     const isValidPassword = await user.comparePassword(password);
     if (!isValidPassword) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ message: 'Geçersiz e-posta veya şifre' });
     }
 
     // Generate tokens
@@ -96,13 +96,16 @@ export const login = async (req, res) => {
     await user.save();
 
     res.json({
-      accessToken,
-      refreshToken,
-      user: user.toJSON()
+      token: accessToken, // Frontend'de sadece access token kullanacağız
+      user: {
+        email: user.email,
+        username: user.username,
+        roles: user.roles
+      }
     });
   } catch (error) {
     res.status(500).json({
-      message: 'Error during login',
+      message: 'Giriş sırasında bir hata oluştu',
       error: error.message
     });
   }

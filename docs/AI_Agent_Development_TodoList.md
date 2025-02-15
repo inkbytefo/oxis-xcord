@@ -55,7 +55,7 @@ Bu TODO listesi, XCord projesinin geliştirme süreçlerini yapay zeka ajanları
 
 **Hedef:** Kullanıcıların temel iletişim ve etkileşim özelliklerini AI ajanları ile geliştirmek.
 
-- [ ] **TODO:** Kayıt sistemi geliştirme promptlarını yaz (Kullanıcı Yönetimi).
+- [+] **TODO:** Kayıt sistemi geliştirme promptlarını yaz (Kullanıcı Yönetimi).
     **Prompt:** `Kullanıcıların e-posta ve şifre ile kayıt olabileceği basit bir kayıt sistemi geliştir. Kullanıcı adı, e-posta ve şifre alanlarını içeren bir kayıt formu oluştur. Form validasyonlarını (zorunlu alanlar, e-posta formatı, şifre karmaşıklığı) implemente et. Kayıt işlemini Auth Service üzerinden gerçekleştir ve başarılı kayıt sonrası kullanıcıyı sisteme otomatik olarak giriş yap.`
 - [ ] **TODO:** Kimlik doğrulama geliştirme promptlarını yaz (Kullanıcı Yönetimi).
     **Prompt:** `Kullanıcıların e-posta ve şifre ile giriş yapabileceği bir kimlik doğrulama sistemi geliştir. Giriş formu oluştur ve form validasyonlarını implemente et. Kimlik doğrulama işlemini Auth Service üzerinden gerçekleştir ve başarılı giriş sonrası kullanıcıya JWT token döndür. Token'ı frontend tarafında güvenli bir şekilde sakla (örneğin, localStorage veya cookies).`
