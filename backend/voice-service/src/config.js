@@ -48,5 +48,4 @@ const config = {
   }
 };
 
-export const config = config;
-
+export { config };
