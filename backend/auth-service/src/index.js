@@ -1,10 +1,10 @@
 import express from 'express';
 import cors from 'cors';
-import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import { config } from './config/index.js';
 import authRoutes from './routes/auth.js';
 import { errorHandler, logRequest, logger } from './middleware/error.js';
+import sequelize from './config/database.js';
 
 // Load environment variables
 dotenv.config();
@@ -16,12 +16,18 @@ app.use(cors(config.cors));
 app.use(express.json());
 app.use(logRequest);
 
-// MongoDB connection
-mongoose.connect(config.mongodb.uri, config.mongodb.options)
-  .then(() => logger.info('Connected to MongoDB'))
+// Database connection
+sequelize.authenticate()
+  .then(() => {
+    logger.info('Connected to PostgreSQL database');
+    return sequelize.sync();
+  })
+  .then(() => {
+    logger.info('Database synchronized');
+  })
   .catch(err => {
-    logger.error('MongoDB connection error:', err);
-    process.exit(1); // Uygulamayı durdur
+    logger.error('Database connection error:', err);
+    process.exit(1);
   });
 
 // Health check

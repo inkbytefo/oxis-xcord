@@ -1,7 +1,6 @@
 import jwt from 'jsonwebtoken';
 import ms from 'ms';
-import mongoose from 'mongoose';
-import { User } from '../models/User.js';
+import { User, sequelize } from '../models/User.js';
 import { config } from '../config/index.js';
 import logger from '../utils/logger.js';
 
@@ -41,7 +40,11 @@ export const register = async (req, res) => {
 
     // Check if user exists
     logger.debug('Kullanıcı varlığı kontrol ediliyor');
-    const userExists = await User.findOne({ $or: [{ username }, { email }] });
+    const userExists = await User.findOne({
+      where: {
+        [sequelize.Op.or]: [{ username }, { email }]
+      }
+    });
     if (userExists) {
       logger.warn('Kullanıcı zaten mevcut', { existingUser: userExists.username || userExists.email });
       return res.status(400).json({
@@ -51,7 +54,7 @@ export const register = async (req, res) => {
 
     // Create new user
     logger.debug('Yeni kullanıcı oluşturuluyor');
-    const user = new User({
+    const user = await User.create({
       username,
       email,
       password,
@@ -59,7 +62,6 @@ export const register = async (req, res) => {
     });
 
     logger.debug('Kullanıcı veritabanına kaydediliyor');
-    await user.save();
 
     logger.info('Kullanıcı başarıyla kaydedildi', { username, email });
     res.status(201).json({
@@ -79,7 +81,7 @@ export const login = async (req, res) => {
     const { email, password } = req.body;
 
     // Find user by email instead of username
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ where: { email } });
     if (!user || !user.isActive) {
       return res.status(401).json({ message: 'Geçersiz e-posta veya şifre' });
     }
@@ -128,7 +130,7 @@ export const refresh = async (req, res) => {
     const { refreshToken } = req.body;
 
     // Find user
-    const user = await User.findById(id);
+    const user = await User.findByPk(id);
     if (!user || !user.isActive || user.refreshToken !== refreshToken) {
       return res.status(401).json({ message: 'Geçersiz yenileme tokeni' });
     }
@@ -154,9 +156,10 @@ export const logout = async (req, res) => {
     const { id } = req.user;
 
     // Clear refresh token
-    await User.findByIdAndUpdate(id, {
-      $unset: { refreshToken: 1 }
-    });
+    await User.update(
+      { refreshToken: null },
+      { where: { id } }
+    );
 
     res.json({ message: 'Başarıyla çıkış yapıldı' });
   } catch (error) {
@@ -169,7 +172,7 @@ export const logout = async (req, res) => {
 
 export const getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findByPk(req.user.id);
     if (!user || !user.isActive) {
       return res.status(404).json({ message: 'Kullanıcı bulunamadı' });
     }
@@ -184,11 +187,10 @@ export const getProfile = async (req, res) => {
 };
 
 export const updateProfile = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  const transaction = await sequelize.transaction();
   try {
     const { email, currentPassword, newPassword } = req.body;
-    const user = await User.findById(req.user.id).session(session);
+    const user = await User.findByPk(req.user.id, { transaction });
 
     if (!user || !user.isActive) {
       return res.status(404).json({ message: 'Kullanıcı bulunamadı' });
@@ -196,7 +198,10 @@ export const updateProfile = async (req, res) => {
 
     // Update email if provided
     if (email && email !== user.email) {
-      const emailExists = await User.findOne({ email }).session(session);
+      const emailExists = await User.findOne({
+        where: { email },
+        transaction
+      });
       if (emailExists) {
         return res.status(400).json({ message: 'Bu e-posta adresi zaten kullanımda' });
       }
@@ -221,17 +226,15 @@ export const updateProfile = async (req, res) => {
       user.password = newPassword;
     }
 
-    await user.save({ session });
-    await session.commitTransaction();
-    session.endSession();
+    await user.save({ transaction });
+    await transaction.commit();
 
     res.json({
       message: 'Profil başarıyla güncellendi',
       user: user.toJSON()
     });
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
+    await transaction.rollback();
     res.status(500).json({
       message: 'Profil güncellenirken bir hata oluştu',
       error: error.message

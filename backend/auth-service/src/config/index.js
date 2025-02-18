@@ -4,12 +4,12 @@ dotenv.config();
 
 export const config = {
   port: process.env.PORT || 3001,
-  mongodb: {
-    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/auth',
-    options: {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    }
+  database: {
+    host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT || 5432,
+    name: process.env.DB_NAME || 'xcord_db',
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || 'postgres'
   },
   jwt: {
     secret: process.env.JWT_SECRET,

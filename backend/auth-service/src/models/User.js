@@ -67,22 +67,8 @@ User.init({
   sequelize,
   modelName: 'User',
   timestamps: true,
-  createdAt: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    field: 'created_at'
-  },
-  updatedAt: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    field: 'updated_at'
-  },
   paranoid: true, // Soft delete için
-  deletedAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-    field: 'deleted_at'
-  },
+  underscored: true, // created_at, updated_at, deleted_at
   indexes: [
     {
       unique: true,

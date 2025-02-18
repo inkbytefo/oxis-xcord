@@ -1,4 +1,4 @@
-import Redis from 'redis';
+import Redis from 'ioredis';
 import winston from 'winston';
 
 const logger = winston.createLogger({
@@ -10,11 +10,9 @@ const logger = winston.createLogger({
   ]
 });
 
-const redisClient = Redis.createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379'
-});
+const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
-redisClient.connect().catch(err => logger.error('Redis connection error:', err));
+redisClient.on('error', err => logger.error('Redis connection error:', err));
 
 // Rate limit configuration - Auth service spesifik limitler
 const WINDOW_SIZE_IN_SECONDS = 300; // 5 dakika
@@ -25,7 +23,7 @@ export const rateLimiter = async (req, res, next) => {
   const key = `rateLimit:auth:${identifier}`;
   
   try {
-    const currentCount = await redisClient.get(key);
+    let currentCount = await redisClient.get(key);
     
     if (currentCount === null) {
       await redisClient.setEx(key, WINDOW_SIZE_IN_SECONDS, 1);
@@ -40,7 +38,10 @@ export const rateLimiter = async (req, res, next) => {
       });
     }
     
-    await redisClient.incr(key);
+    await redisClient.multi()
+      .incr(key)
+      .expire(key, WINDOW_SIZE_IN_SECONDS)
+      .exec();
     next();
   } catch (error) {
     logger.error('Rate limiter error:', error);
