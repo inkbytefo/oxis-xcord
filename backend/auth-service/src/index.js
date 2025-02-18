@@ -19,7 +19,10 @@ app.use(logRequest);
 // MongoDB connection
 mongoose.connect(config.mongodb.uri, config.mongodb.options)
   .then(() => logger.info('Connected to MongoDB'))
-  .catch(err => logger.error('MongoDB connection error:', err));
+  .catch(err => {
+    logger.error('MongoDB connection error:', err);
+    process.exit(1); // Uygulamayı durdur
+  });
 
 // Health check
 app.get('/health', (req, res) => {

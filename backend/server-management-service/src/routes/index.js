@@ -1,8 +1,11 @@
 import express from 'express';
 import { serverController } from '../controllers/serverController.js';
 import { channelController } from '../controllers/channelController.js';
+import { rateLimiter } from '../middleware/rate-limiter.js';
 
 const router = express.Router();
+
+router.use(rateLimiter);
 
 // Sunucu route'ları
 router.post('/servers', serverController.createServer);

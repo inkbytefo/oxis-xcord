@@ -140,7 +140,7 @@ async function createWorkers() {
       mediasoupWorkersGauge.dec();
       errorCounter.inc({ type: 'worker_died' });
       mediasoupLogger.error(i, 'workerDied');
-      createWorker(i);
+      createWorkers();
     });
 
     workers.set(i, worker);

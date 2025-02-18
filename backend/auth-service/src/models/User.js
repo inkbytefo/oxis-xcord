@@ -1,84 +1,113 @@
-import mongoose from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
 import bcrypt from 'bcryptjs';
-import { config } from '../config/index.js';
+import sequelize from '../config/database.js';
 
-const userSchema = new mongoose.Schema({
+class User extends Model {
+  async comparePassword(candidatePassword) {
+    return bcrypt.compare(candidatePassword, this.password);
+  }
+
+  toJSON() {
+    const values = { ...this.get() };
+    delete values.password;
+    delete values.refreshToken;
+    return values;
+  }
+}
+
+User.init({
   username: {
-    type: String,
-    required: [true, 'Username is required'],
+    type: DataTypes.STRING,
+    allowNull: false,
     unique: true,
-    trim: true,
-    minlength: [3, 'Username must be at least 3 characters'],
-    maxlength: [30, 'Username cannot exceed 30 characters']
+    validate: {
+      len: [3, 30]
+    }
   },
   email: {
-    type: String,
-    required: [true, 'Email is required'],
+    type: DataTypes.STRING,
+    allowNull: false,
     unique: true,
-    trim: true,
-    lowercase: true,
-    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email']
+    validate: {
+      isEmail: true
+    }
   },
   password: {
-    type: String,
-    required: [true, 'Password is required'],
-    minlength: [8, 'Password must be at least 8 characters']
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      len: [8, 100]
+    }
   },
   roles: {
-    type: [String],
-    default: ['user'],
-    enum: ['user', 'admin', 'moderator']
+    type: DataTypes.ARRAY(DataTypes.STRING),
+    defaultValue: ['user'],
+    validate: {
+      isValidRole(value) {
+        const validRoles = ['user', 'admin', 'moderator'];
+        if (!value.every(role => validRoles.includes(role))) {
+          throw new Error('Invalid role');
+        }
+      }
+    }
   },
   refreshToken: {
-    type: String
+    type: DataTypes.STRING,
+    allowNull: true
   },
   isActive: {
-    type: Boolean,
-    default: true
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   },
   lastLogin: {
-    type: Date
-  },
+    type: DataTypes.DATE,
+    allowNull: true
+  }
+}, {
+  sequelize,
+  modelName: 'User',
+  timestamps: true,
   createdAt: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.DATE,
+    allowNull: false,
+    field: 'created_at'
   },
   updatedAt: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.DATE,
+    allowNull: false,
+    field: 'updated_at'
+  },
+  paranoid: true, // Soft delete için
+  deletedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'deleted_at'
+  },
+  indexes: [
+    {
+      unique: true,
+      fields: ['email']
+    },
+    {
+      unique: true,
+      fields: ['username']
+    }
+  ]
+});
+
+// Hash password before save
+User.beforeCreate(async (user) => {
+  if (user.changed('password')) {
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(user.password, salt);
   }
 });
 
-// Update timestamp before save
-userSchema.pre('save', function(next) {
-  this.updatedAt = new Date();
-  next();
-});
-
-// Hash password before saving
-userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
-  
-  try {
-    const salt = await bcrypt.genSalt(config.bcrypt.saltRounds);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error);
+User.beforeUpdate(async (user) => {
+  if (user.changed('password')) {
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(user.password, salt);
   }
 });
 
-// Compare password method
-userSchema.methods.comparePassword = async function(candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
-};
-
-// Remove sensitive fields when converting to JSON
-userSchema.methods.toJSON = function() {
-  const obj = this.toObject();
-  delete obj.password;
-  delete obj.refreshToken;
-  return obj;
-};
-
-export const User = mongoose.model('User', userSchema);
+export { User, sequelize };

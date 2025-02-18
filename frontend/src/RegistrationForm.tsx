@@ -13,7 +13,16 @@ interface FormErrors {
   password?: string;
 }
 
-export const RegistrationForm: React.FC = () => {
+interface RegistrationResponse {
+  message?: string;
+  error?: string;
+}
+
+interface RegistrationFormProps {
+  onRegistrationSuccess?: () => void;
+}
+
+export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onRegistrationSuccess }) => {
   const [formData, setFormData] = useState<FormData>({
     username: '',
     email: '',
@@ -26,25 +35,22 @@ export const RegistrationForm: React.FC = () => {
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
-    // Username validation
     if (!formData.username.trim()) {
-      newErrors.username = 'Username is required';
+      newErrors.username = 'Kullanıcı adı gerekli';
     }
 
-    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!formData.email) {
-      newErrors.email = 'Email is required';
+      newErrors.email = 'E-posta adresi gerekli';
     } else if (!emailRegex.test(formData.email)) {
-      newErrors.email = 'Invalid email format';
+      newErrors.email = 'Geçerli bir e-posta adresi giriniz';
     }
 
-    // Password validation
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     if (!formData.password) {
-      newErrors.password = 'Password is required';
+      newErrors.password = 'Şifre gerekli';
     } else if (!passwordRegex.test(formData.password)) {
-      newErrors.password = 'Password must contain at least 8 characters, one uppercase, one lowercase, one number and one special character';
+      newErrors.password = 'Şifre en az 8 karakter uzunluğunda olmalı ve en az bir büyük harf, bir küçük harf, bir rakam ve bir özel karakter içermelidir';
     }
 
     setErrors(newErrors);
@@ -70,47 +76,35 @@ export const RegistrationForm: React.FC = () => {
     setLoading(true);
     
     try {
-      // Register user
-      const registerResponse = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!registerResponse.ok) {
-        const data = await registerResponse.json();
-        throw new Error(data.message || 'Registration failed');
-      }
-
-      // Auto login after successful registration
-      const loginResponse = await fetch('/api/auth/login', {
+      const registerResponse = await fetch('http://localhost:3000/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           username: formData.username,
-          password: formData.password,
+          email: formData.email,
+          password: formData.password
         }),
       });
 
-      if (!loginResponse.ok) {
-        throw new Error('Auto login failed');
+      const data: RegistrationResponse = await registerResponse.json();
+
+      if (!registerResponse.ok) {
+        const errorMessage = data.message || data.error || 'Kayıt başarısız';
+        throw new Error(errorMessage);
       }
 
-      const loginData = await loginResponse.json();
+      setMessage('Kayıt başarılı! Giriş sayfasına yönlendiriliyorsunuz...');
       
-      // Store tokens
-      localStorage.setItem('accessToken', loginData.accessToken);
-      localStorage.setItem('refreshToken', loginData.refreshToken);
-      
-      setMessage('Registration successful! Redirecting...');
-      // Redirect or update app state here
-      
+      setTimeout(() => {
+        if (onRegistrationSuccess) {
+          onRegistrationSuccess();
+        }
+      }, 2000);
+
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'An error occurred');
+      setMessage(error instanceof Error ? error.message : 'Bir hata oluştu');
     } finally {
       setLoading(false);
     }
@@ -119,10 +113,10 @@ export const RegistrationForm: React.FC = () => {
   return (
     <div className="registration-form-container">
       <form onSubmit={handleSubmit} className="registration-form">
-        <h2>Register</h2>
+        <h2>Kayıt Ol</h2>
         
         <div className="form-group">
-          <label htmlFor="username">Username</label>
+          <label htmlFor="username">Kullanıcı Adı</label>
           <input
             type="text"
             id="username"
@@ -135,7 +129,7 @@ export const RegistrationForm: React.FC = () => {
         </div>
 
         <div className="form-group">
-          <label htmlFor="email">Email</label>
+          <label htmlFor="email">E-posta</label>
           <input
             type="email"
             id="email"
@@ -148,7 +142,7 @@ export const RegistrationForm: React.FC = () => {
         </div>
 
         <div className="form-group">
-          <label htmlFor="password">Password</label>
+          <label htmlFor="password">Şifre</label>
           <input
             type="password"
             id="password"
@@ -160,12 +154,12 @@ export const RegistrationForm: React.FC = () => {
           {errors.password && <span className="error">{errors.password}</span>}
         </div>
 
-        {message && <div className={`message ${message.includes('successful') ? 'success' : 'error'}`}>
+        {message && <div className={`message ${message.includes('başarılı') ? 'success' : 'error'}`}>
           {message}
         </div>}
 
         <button type="submit" disabled={loading}>
-          {loading ? 'Registering...' : 'Register'}
+          {loading ? 'Kaydediliyor...' : 'Kayıt Ol'}
         </button>
       </form>
     </div>

@@ -1,23 +1,31 @@
 export default {
   PORT: process.env.PORT || 3000,
-  JWT_SECRET: process.env.JWT_SECRET || 'your-secret-key',
+  JWT_SECRET: process.env.JWT_SECRET,
   
+  // CORS ayarları
+  CORS: {
+    ORIGINS: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : ['http://localhost:5173', 'http://localhost:80'],
+    CREDENTIALS: true,
+    METHODS: ['GET', 'POST', 'PUT', 'DELETE'],
+    ALLOWED_HEADERS: ['Content-Type', 'Authorization']
+  },
+
   // Servis URL'leri
   SERVICES: {
     AUTH: {
-      URL: process.env.AUTH_SERVICE_URL || 'http://localhost:3001',
+      URL: process.env.AUTH_SERVICE_URL || 'http://auth-service:3002',
       PREFIX: '/auth'
     },
     MESSAGING: {
-      URL: process.env.MESSAGING_SERVICE_URL || 'http://localhost:3002',
+      URL: process.env.MESSAGING_SERVICE_URL || 'http://messaging-service:3005',
       PREFIX: '/messaging'
     },
     VOICE: {
-      URL: process.env.VOICE_SERVICE_URL || 'http://localhost:3003',
+      URL: process.env.VOICE_SERVICE_URL || 'http://voice-service:3003',
       PREFIX: '/voice'
     },
     SERVER_MANAGEMENT: {
-      URL: process.env.SERVER_MANAGEMENT_SERVICE_URL || 'http://localhost:3004', // Port güncellendi: 3004
+      URL: process.env.SERVER_MANAGEMENT_SERVICE_URL || 'http://server-management-service:3004',
       PREFIX: '/servers'
     }
   },

@@ -32,10 +32,15 @@ const Message = sequelize.define('Message', {
   sent_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
+    field: 'sent_at'
   },
 }, {
   tableName: 'messages',
-  timestamps: false,
+  timestamps: true,
+  createdAt: 'sent_at',
+  updatedAt: false,
+  deletedAt: 'deleted_at',
+  paranoid: false,
 });
 
 Message.belongsTo(Channel, { foreignKey: 'channel_id' });

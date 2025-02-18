@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 import jwt from 'jsonwebtoken';
 import config from '../config.js';
 import { RoomManager } from '../lib/RoomManager.js';
+import { roomJoinRateLimiter, signalRateLimiter } from '../middleware/rate-limiter.js';
 
 class VoiceManager {
   constructor(server) {
@@ -53,14 +54,14 @@ class VoiceManager {
     const socketId = this.generateSocketId();
     this.connections.set(socketId, { socket, user });
 
-    console.log(`Voice bağlantısı kuruldu: ${user.username}`);
+    logger.info(`Voice bağlantısı kuruldu: ${user.username}`);
 
-    socket.on('message', (data) => {
+    socket.on('message', async (data) => {
       try {
         const message = JSON.parse(data);
-        this.handleMessage(socketId, message);
+        await this.handleMessage(socketId, message);
       } catch (error) {
-        console.error('Mesaj işleme hatası:', error);
+        logger.error('Mesaj işleme hatası:', error);
       }
     });
 
@@ -81,61 +82,77 @@ class VoiceManager {
     }));
   }
 
-  handleMessage(socketId, message) {
+  async handleMessage(socketId, message) {
     const connection = this.connections.get(socketId);
     if (!connection) return;
 
     const { type, data } = message;
     const { user, socket } = connection;
 
-    switch (type) {
-      case 'join-room':
-        this.handleJoinRoom(socketId, data.roomId);
-        break;
-      case 'leave-room':
-        this.handleLeaveRoom(socketId, data.roomId);
-        break;
-      case 'voice-data':
-        this.handleVoiceData(socketId, data);
-        break;
-      case 'mute':
-        this.handleMute(socketId, data.roomId, data.isMuted);
-        break;
-      default:
-        console.warn(`Bilinmeyen mesaj tipi: ${type}`);
+    try {
+      switch (type) {
+        case 'join-room':
+          await this.handleJoinRoom(socketId, data.roomId);
+          break;
+        case 'leave-room':
+          await this.handleLeaveRoom(socketId, data.roomId);
+          break;
+        case 'voice-data':
+          await this.handleVoiceData(socketId, data);
+          break;
+        case 'mute':
+          this.handleMute(socketId, data.roomId, data.isMuted);
+          break;
+        default:
+          console.warn(`Bilinmeyen mesaj tipi: ${type}`);
+      }
+    } catch (error) {
+      logger.error('Mesaj işleme hatası:', error);
+      socket.send(JSON.stringify({
+        type: 'error',
+        message: error.message
+      }));
     }
   }
 
-  handleJoinRoom(socketId, roomId) {
+  async handleJoinRoom(socketId, roomId) {
     const connection = this.connections.get(socketId);
     if (!connection) return;
 
-    const room = this.rooms.getOrCreateRoom(roomId);
-    room.addParticipant(connection.user.id, socketId);
+    try {
+      await roomJoinRateLimiter(connection.socket);
+      const room = this.rooms.getOrCreateRoom(roomId);
+      room.addParticipant(connection.user.id, socketId);
 
-    // Odadaki diğer kullanıcıları bilgilendir
-    this.broadcastToRoom(roomId, {
-      type: 'user-joined',
-      data: {
-        userId: connection.user.id,
-        username: connection.user.username
-      }
-    }, [socketId]);
+      // Odadaki diğer kullanıcıları bilgilendir
+      this.broadcastToRoom(roomId, {
+        type: 'user-joined',
+        data: {
+          userId: connection.user.id,
+          username: connection.user.username
+        }
+      }, [socketId]);
 
-    // Yeni kullanıcıya mevcut katılımcıları gönder
-    const participants = room.getParticipants().map(p => ({
-      userId: p.userId,
-      username: this.getUserById(p.userId)?.username,
-      isMuted: p.isMuted
-    }));
+      // Yeni kullanıcıya mevcut katılımcıları gönder
+      const participants = room.getParticipants().map(p => ({
+        userId: p.userId,
+        username: this.getUserById(p.userId)?.username,
+        isMuted: p.isMuted
+      }));
 
-    connection.socket.send(JSON.stringify({
-      type: 'room-info',
-      data: {
-        roomId,
-        participants
-      }
-    }));
+      connection.socket.send(JSON.stringify({
+        type: 'room-info',
+        data: {
+          roomId,
+          participants
+        }
+      }));
+    } catch (error) {
+      connection.socket.send(JSON.stringify({
+        type: 'error',
+        message: error.message
+      }));
+    }
   }
 
   handleLeaveRoom(socketId, roomId) {
@@ -162,22 +179,31 @@ class VoiceManager {
     }
   }
 
-  handleVoiceData(socketId, data) {
+  async handleVoiceData(socketId, data) {
     const connection = this.connections.get(socketId);
     if (!connection) return;
 
-    const room = this.rooms.getRoomByUserId(connection.user.id);
-    if (!room) return;
+    try {
+      await signalRateLimiter(connection.socket);
 
-    // Ses verisini odadaki diğer kullanıcılara ilet
-    this.broadcastToRoom(room.id, {
-      type: 'voice-data',
-      data: {
-        userId: connection.user.id,
-        username: connection.user.username,
-        voiceData: data.voiceData
-      }
-    }, [socketId]);
+      const room = this.rooms.getRoomByUserId(connection.user.id);
+      if (!room) return;
+
+      // Ses verisini odadaki diğer kullanıcılara ilet
+      this.broadcastToRoom(room.id, {
+        type: 'voice-data',
+        data: {
+          userId: connection.user.id,
+          username: connection.user.username,
+          voiceData: data.voiceData
+        }
+      }, [socketId]);
+    } catch (error) {
+      connection.socket.send(JSON.stringify({
+        type: 'error',
+        message: error.message
+      }));
+    }
   }
 
   handleMute(socketId, roomId, isMuted) {
@@ -212,7 +238,7 @@ class VoiceManager {
     });
 
     this.connections.delete(socketId);
-    console.log(`Voice bağlantısı kapandı: ${connection.user.username}`);
+    logger.info(`Voice bağlantısı kapandı: ${connection.user.username}`);
   }
 
   broadcastToRoom(roomId, message, excludeSocketIds = []) {

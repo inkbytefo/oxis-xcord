@@ -1,6 +1,8 @@
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
-import config from '../config';
+import config from '../config.js';
+import { logger } from '../utils/logger.js';
+import { RoomManager } from '../utils/redis.js';
 
 class SocketManager {
   constructor(server) {
@@ -28,7 +30,7 @@ class SocketManager {
           return next(new Error('Kimlik doğrulama gerekli'));
         }
 
-        const decoded = jwt.verify(token, config.jwtSecret);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
         socket.user = decoded;
         next();
       } catch (error) {
@@ -39,7 +41,7 @@ class SocketManager {
 
   setupEventHandlers() {
     this.io.on('connection', (socket) => {
-      console.log(`Kullanıcı bağlandı: ${socket.user.id}`);
+      logger.info(`Kullanıcı bağlandı: ${socket.user.id}`);
       this.handleConnection(socket);
 
       socket.on('join-room', (roomId) => this.handleJoinRoom(socket, roomId));
@@ -52,60 +54,79 @@ class SocketManager {
 
   handleConnection(socket) {
     const userId = socket.user.id;
-    if (!this.userSockets.has(userId)) {
-      this.userSockets.set(userId, new Set());
-    }
-    this.userSockets.get(userId).add(socket.id);
-
-    // Kullanıcının durumunu çevrimiçi olarak güncelle
-    this.broadcastUserStatus(userId, 'online');
+    logger.info(`Kullanıcı bağlandı: ${userId}`);
   }
 
-  handleJoinRoom(socket, roomId) {
-    socket.join(roomId);
-    
-    if (!this.roomSockets.has(roomId)) {
-      this.roomSockets.set(roomId, new Set());
-    }
-    this.roomSockets.get(roomId).add(socket.user.id);
-
-    // Odadaki diğer kullanıcılara bildir
-    socket.to(roomId).emit('user-joined', {
-      userId: socket.user.id,
-      username: socket.user.username
-    });
-  }
-
-  handleLeaveRoom(socket, roomId) {
-    socket.leave(roomId);
-    
-    const roomUsers = this.roomSockets.get(roomId);
-    if (roomUsers) {
-      roomUsers.delete(socket.user.id);
-      if (roomUsers.size === 0) {
-        this.roomSockets.delete(roomId);
+  async handleJoinRoom(socket, roomId) {
+    const userId = socket.user.id;
+    try {
+      const added = await RoomManager.addUserToRoom(roomId, userId);
+      if (!added) {
+        logger.error(`Redis'e kullanıcı eklenemedi: ${userId} odaya: ${roomId}`);
+        return;
       }
-    }
+      socket.join(roomId);
+      logger.info(`Kullanıcı ${userId} odaya katıldı: ${roomId}`);
 
-    // Odadaki diğer kullanıcılara bildir
-    socket.to(roomId).emit('user-left', {
-      userId: socket.user.id,
-      username: socket.user.username
-    });
+      // Odadaki diğer kullanıcılara bildir
+      const roomUsers = await RoomManager.getRoomUsers(roomId);
+      socket.to(roomId).emit('user-joined', {
+        userId: userId,
+        username: socket.user.username,
+        roomUsers: roomUsers
+      });
+    } catch (error) {
+      logger.error('handleJoinRoom error:', error);
+    }
+  }
+
+  async handleLeaveRoom(socket, roomId) {
+    const userId = socket.user.id;
+    try {
+      const removed = await RoomManager.removeUserFromRoom(roomId, userId);
+      if (!removed) {
+        logger.error(`Redis'ten kullanıcı silinemedi: ${userId} odadan: ${roomId}`);
+        return;
+      }
+      socket.leave(roomId);
+      logger.info(`Kullanıcı ${userId} odadan ayrıldı: ${roomId}`);
+
+      // Odadaki diğer kullanıcılara bildir
+      const roomUsers = await RoomManager.getRoomUsers(roomId);
+      socket.to(roomId).emit('user-left', {
+        userId: userId,
+        username: socket.user.username,
+        roomUsers: roomUsers
+      });
+    } catch (error) {
+      logger.error('handleLeaveRoom error:', error);
+    }
   }
 
   handleSendMessage(socket, { roomId, content, type = 'text' }) {
-    const message = {
-      id: Date.now().toString(),
-      userId: socket.user.id,
-      username: socket.user.username,
-      content,
-      type,
-      timestamp: new Date().toISOString()
-    };
+    const userId = socket.user.id;
+    RoomManager.isUserInRoom(roomId, userId)
+      .then(isInRoom => {
+        if (!isInRoom) {
+          logger.warn(`Kullanıcı ${userId} odada değil: ${roomId}`);
+          return;
+        }
 
-    // Mesajı odadaki tüm kullanıcılara gönder
-    this.io.to(roomId).emit('new-message', message);
+        const message = {
+          id: Date.now().toString(),
+          userId: userId,
+          username: socket.user.username,
+          content,
+          type,
+          timestamp: new Date().toISOString()
+        };
+
+        // Mesajı odadaki tüm kullanıcılara gönder
+        this.io.to(roomId).emit('new-message', message);
+      })
+      .catch(error => {
+        logger.error('isUserInRoom error:', error);
+      });
   }
 
   handleTyping(socket, { roomId, isTyping }) {
@@ -116,28 +137,28 @@ class SocketManager {
     });
   }
 
-  handleDisconnect(socket) {
+  async handleDisconnect(socket) {
     const userId = socket.user.id;
-    const userSockets = this.userSockets.get(userId);
-    
-    if (userSockets) {
-      userSockets.delete(socket.id);
-      if (userSockets.size === 0) {
-        this.userSockets.delete(userId);
-        // Kullanıcının durumunu çevrimdışı olarak güncelle
-        this.broadcastUserStatus(userId, 'offline');
-      }
-    }
+    logger.info(`Kullanıcı ayrıldı: ${userId}`);
 
-    // Kullanıcıyı tüm odalardan çıkar
-    this.roomSockets.forEach((users, roomId) => {
-      if (users.has(userId)) {
-        users.delete(userId);
-        if (users.size === 0) {
-          this.roomSockets.delete(roomId);
+    try {
+      const userRooms = await RoomManager.getUserRooms(userId);
+      if (userRooms && userRooms.length > 0) {
+        for (const roomId of userRooms) {
+          await RoomManager.removeUserFromRoom(roomId, userId);
+          socket.leave(roomId);
+          // Odaya katılan kullanıcılara bildirim gönder
+          const roomUsers = await RoomManager.getRoomUsers(roomId);
+          socket.to(roomId).emit('user-left', {
+            userId: userId,
+            username: socket.user.username,
+            roomUsers: roomUsers
+          });
         }
       }
-    });
+    } catch (error) {
+      logger.error('handleDisconnect error:', error);
+    }
   }
 
   broadcastUserStatus(userId, status) {

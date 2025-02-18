@@ -1,6 +1,9 @@
 import jwt from 'jsonwebtoken';
+import ms from 'ms';
+import mongoose from 'mongoose';
 import { User } from '../models/User.js';
 import { config } from '../config/index.js';
+import logger from '../utils/logger.js';
 
 const generateTokens = (user) => {
   const payload = {
@@ -24,30 +27,30 @@ const generateTokens = (user) => {
 export const register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
-    logger.debug('Register request received', { username, email });
+    logger.debug('Kayıt isteği alındı', { username, email });
 
     // Validate password strength
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    logger.debug('Validating password');
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d]{8,}$/;
+    logger.debug('Şifre doğrulanıyor');
     if (!passwordRegex.test(password)) {
-      logger.warn('Password validation failed');
+      logger.warn('Şifre doğrulama başarısız');
       return res.status(400).json({
-        message: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character'
+        message: 'Şifre en az 8 karakter uzunluğunda olmalı ve en az bir büyük harf, bir küçük harf ve bir sayı içermelidir'
       });
     }
 
     // Check if user exists
-    logger.debug('Checking if user exists');
+    logger.debug('Kullanıcı varlığı kontrol ediliyor');
     const userExists = await User.findOne({ $or: [{ username }, { email }] });
     if (userExists) {
-      logger.warn('User already exists', { existingUser: userExists.username || userExists.email });
+      logger.warn('Kullanıcı zaten mevcut', { existingUser: userExists.username || userExists.email });
       return res.status(400).json({
-        message: userExists.username === username ? 'Username is taken' : 'Email is already registered'
+        message: userExists.username === username ? 'Bu kullanıcı adı zaten alınmış' : 'Bu e-posta adresi zaten kayıtlı'
       });
     }
 
     // Create new user
-    logger.debug('Creating new user');
+    logger.debug('Yeni kullanıcı oluşturuluyor');
     const user = new User({
       username,
       email,
@@ -55,17 +58,17 @@ export const register = async (req, res) => {
       roles: ['user']
     });
 
-    logger.debug('Saving user to database');
+    logger.debug('Kullanıcı veritabanına kaydediliyor');
     await user.save();
 
-    logger.info('User registered successfully', { username, email });
+    logger.info('Kullanıcı başarıyla kaydedildi', { username, email });
     res.status(201).json({
-      message: 'User registered successfully'
+      message: 'Kullanıcı başarıyla kaydedildi'
     });
   } catch (error) {
-    logger.error('Error registering user', { error: error.message, stack: error.stack });
+    logger.error('Kullanıcı kaydı sırasında hata', { error: error.message, stack: error.stack });
     res.status(500).json({
-      message: 'Error registering user',
+      message: 'Kullanıcı kaydı sırasında bir hata oluştu',
       error: error.message
     });
   }
@@ -95,8 +98,16 @@ export const login = async (req, res) => {
     user.lastLogin = new Date();
     await user.save();
 
+    // HTTP-only cookie olarak refresh token'ı gönder
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: ms(config.jwt.refreshExpiresIn)
+    });
+
     res.json({
-      token: accessToken, // Frontend'de sadece access token kullanacağız
+      token: accessToken,
       user: {
         email: user.email,
         username: user.username,
@@ -119,7 +130,7 @@ export const refresh = async (req, res) => {
     // Find user
     const user = await User.findById(id);
     if (!user || !user.isActive || user.refreshToken !== refreshToken) {
-      return res.status(401).json({ message: 'Invalid refresh token' });
+      return res.status(401).json({ message: 'Geçersiz yenileme tokeni' });
     }
 
     // Generate new tokens
@@ -132,7 +143,7 @@ export const refresh = async (req, res) => {
     res.json(tokens);
   } catch (error) {
     res.status(500).json({
-      message: 'Error refreshing token',
+      message: 'Token yenileme sırasında bir hata oluştu',
       error: error.message
     });
   }
@@ -147,10 +158,10 @@ export const logout = async (req, res) => {
       $unset: { refreshToken: 1 }
     });
 
-    res.json({ message: 'Logged out successfully' });
+    res.json({ message: 'Başarıyla çıkış yapıldı' });
   } catch (error) {
     res.status(500).json({
-      message: 'Error during logout',
+      message: 'Çıkış yapılırken bir hata oluştu',
       error: error.message
     });
   }
@@ -160,32 +171,34 @@ export const getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user || !user.isActive) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: 'Kullanıcı bulunamadı' });
     }
 
     res.json(user.toJSON());
   } catch (error) {
     res.status(500).json({
-      message: 'Error fetching profile',
+      message: 'Profil bilgileri alınırken bir hata oluştu',
       error: error.message
     });
   }
 };
 
 export const updateProfile = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { email, currentPassword, newPassword } = req.body;
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id).session(session);
 
     if (!user || !user.isActive) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: 'Kullanıcı bulunamadı' });
     }
 
     // Update email if provided
     if (email && email !== user.email) {
-      const emailExists = await User.findOne({ email });
+      const emailExists = await User.findOne({ email }).session(session);
       if (emailExists) {
-        return res.status(400).json({ message: 'Email is already in use' });
+        return res.status(400).json({ message: 'Bu e-posta adresi zaten kullanımda' });
       }
       user.email = email;
     }
@@ -194,29 +207,33 @@ export const updateProfile = async (req, res) => {
     if (currentPassword && newPassword) {
       const isValidPassword = await user.comparePassword(currentPassword);
       if (!isValidPassword) {
-        return res.status(401).json({ message: 'Current password is incorrect' });
+        return res.status(401).json({ message: 'Mevcut şifre yanlış' });
       }
 
       // Validate new password strength
-      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d]{8,}$/;
       if (!passwordRegex.test(newPassword)) {
         return res.status(400).json({
-          message: 'New password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character'
+          message: 'Yeni şifre en az 8 karakter uzunluğunda olmalı ve en az bir büyük harf, bir küçük harf ve bir sayı içermelidir'
         });
       }
 
       user.password = newPassword;
     }
 
-    await user.save();
+    await user.save({ session });
+    await session.commitTransaction();
+    session.endSession();
 
     res.json({
-      message: 'Profile updated successfully',
+      message: 'Profil başarıyla güncellendi',
       user: user.toJSON()
     });
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({
-      message: 'Error updating profile',
+      message: 'Profil güncellenirken bir hata oluştu',
       error: error.message
     });
   }

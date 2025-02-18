@@ -1,41 +1,76 @@
-version: '3.8'
-
 services:
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - BUILD_CONTEXT=./frontend
+        - GIT_EXCLUDE=.git
+        - NODE_MODULES_EXCLUDE=node_modules
     ports:
       - "80:80"
     depends_on:
       - api-gateway
-    networks:
-      - xcord-network
 
   api-gateway:
     build:
       context: ./backend/api-gateway
       dockerfile: Dockerfile
+      args:
+        - BUILD_CONTEXT=./backend/api-gateway
+        - GIT_EXCLUDE=.git
+        - NODE_MODULES_EXCLUDE=node_modules
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
+      - JWT_SECRET=${JWT_SECRET}
+      - REDIS_URL=redis://redis:6379
       - AUTH_SERVICE_URL=http://auth-service:3002
-      - MESSAGING_SERVICE_URL=http://messaging-service:3001
+      - MESSAGING_SERVICE_URL=http://messaging-service:3005
       - VOICE_SERVICE_URL=http://voice-service:3003
       - SERVER_MANAGEMENT_URL=http://server-management-service:3004
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:80,https://xcord.example.com}
     depends_on:
-      - auth-service
-      - messaging-service
-      - voice-service
-      - server-management-service
-    networks:
-      - xcord-network
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      messaging-service:
+        condition: service_started
+      voice-service:
+        condition: service_started
+      server-management-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   auth-service:
     build:
       context: ./backend/auth-service
       dockerfile: Dockerfile
+      args:
+        - BUILD_CONTEXT=./backend/auth-service
+        - GIT_EXCLUDE=.git
+        - NODE_MODULES_EXCLUDE=node_modules
     ports:
       - "3002:3002"
     environment:
@@ -45,18 +80,29 @@ services:
       - DB_NAME=xcord_db
       - DB_USER=postgres
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      - JWT_SECRET=${JWT_SECRET:-your-secret-key}
+      - JWT_SECRET=${JWT_SECRET}
+      - REDIS_URL=redis://redis:6379
     depends_on:
-      - db
-    networks:
-      - xcord-network
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   messaging-service:
     build:
       context: ./backend/messaging-service
       dockerfile: Dockerfile
+      args:
+        - BUILD_CONTEXT=./backend/messaging-service
+        - GIT_EXCLUDE=.git
+        - NODE_MODULES_EXCLUDE=node_modules
     ports:
-      - "3001:3001"
+      - "3005:3001"
     environment:
       - NODE_ENV=production
       - DB_HOST=db
@@ -64,16 +110,28 @@ services:
       - DB_NAME=xcord_db
       - DB_USER=postgres
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - REDIS_URL=redis://redis:6379
     depends_on:
-      - db
-      - logstash
-    networks:
-      - xcord-network
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      logstash:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   voice-service:
     build:
       context: ./backend/voice-service
       dockerfile: Dockerfile
+      args:
+        - BUILD_CONTEXT=./backend/voice-service
+        - GIT_EXCLUDE=.git
+        - NODE_MODULES_EXCLUDE=node_modules
     ports:
       - "3003:3003"
       - "10000-10100:10000-10100/udp"
@@ -81,15 +139,26 @@ services:
       - NODE_ENV=production
       - MEDIASOUP_LISTEN_IP=0.0.0.0
       - MEDIASOUP_ANNOUNCED_IP=${MEDIASOUP_ANNOUNCED_IP:-127.0.0.1}
+      - REDIS_URL=redis://redis:6379
     depends_on:
-      - logstash
-    networks:
-      - xcord-network
+      redis:
+        condition: service_healthy
+      logstash:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   server-management-service:
     build:
       context: ./backend/server-management-service
       dockerfile: Dockerfile
+      args:
+        - BUILD_CONTEXT=./backend/server-management-service
+        - GIT_EXCLUDE=.git
+        - NODE_MODULES_EXCLUDE=node_modules
     ports:
       - "3004:3004"
     environment:
@@ -99,10 +168,17 @@ services:
       - DB_NAME=xcord_db
       - DB_USER=postgres
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - REDIS_URL=redis://redis:6379
     depends_on:
-      - db
-    networks:
-      - xcord-network
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   db:
     image: postgres:14-alpine
@@ -114,8 +190,11 @@ services:
       - POSTGRES_DB=xcord_db
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
-    networks:
-      - xcord-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d xcord_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   prometheus:
     image: prom/prometheus:latest
@@ -129,8 +208,6 @@ services:
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
-    networks:
-      - xcord-network
 
   grafana:
     image: grafana/grafana:latest
@@ -145,8 +222,6 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     depends_on:
       - prometheus
-    networks:
-      - xcord-network
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.1
@@ -158,8 +233,11 @@ services:
       - discovery.type=single-node
       - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    networks:
-      - xcord-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health?wait_for_status=green&timeout=10s"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   logstash:
     image: docker.elastic.co/logstash/logstash:8.12.1
@@ -175,8 +253,11 @@ services:
       - "LS_JAVA_OPTS=-Xms256m -Xmx256m"
     depends_on:
       - elasticsearch
-    networks:
-      - xcord-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9600"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.12.1
@@ -188,15 +269,19 @@ services:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     depends_on:
       - elasticsearch
-    networks:
-      - xcord-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5601/api/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
 volumes:
   postgres_data:
   prometheus_data:
   grafana_data:
   elasticsearch_data:
+  redis_data:
 
 networks:
-  xcord-network:
+  default:
     driver: bridge

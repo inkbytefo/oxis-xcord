@@ -12,6 +12,8 @@ interface LoginResponse {
     username: string;
     roles: string[];
   };
+  message?: string;
+  error?: string;
 }
 
 export const LoginForm = ({ onLogin }: LoginFormProps) => {
@@ -46,7 +48,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
 
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/auth/login', {
+      const response = await fetch('http://localhost:3000/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,7 +60,8 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
       const data: LoginResponse = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.token || 'Giriş başarısız');
+        const errorMessage = data.message || data.error || 'Giriş başarısız';
+        throw new Error(errorMessage);
       }
 
       localStorage.setItem('token', data.token);

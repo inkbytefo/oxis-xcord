@@ -1,12 +1,13 @@
 import express from 'express';
 import { register, login, refresh, logout, getProfile, updateProfile } from '../controllers/auth.js';
 import { verifyToken, verifyRefreshToken, checkRole } from '../middleware/auth.js';
+import { rateLimiter } from '../middleware/rate-limiter.js';
 
 const router = express.Router();
 
 // Public routes
-router.post('/register', register);
-router.post('/login', login);
+router.post('/register', rateLimiter, register);
+router.post('/login', rateLimiter, login);
 router.post('/refresh-token', verifyRefreshToken, refresh);
 
 // Protected routes

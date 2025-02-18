@@ -1,6 +1,6 @@
 const config = {
   port: process.env.PORT || 3003,
-  jwtSecret: process.env.JWT_SECRET || 'your-secret-key',
+  jwtSecret: process.env.JWT_SECRET,
   mediasoup: {
     worker: {
       rtcMinPort: 40000,
@@ -25,7 +25,6 @@ const config = {
           parameters: {
             minptime: 10,
             useinbandfec: 1,
-            // Enable noise suppression
             sprop_stereo: 1,
             usedtx: 1
           }

@@ -30,14 +30,20 @@ const Channel = sequelize.define('Channel', {
   created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
+    field: 'created_at'
   },
   updated_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
+    field: 'updated_at'
   },
 }, {
   tableName: 'channels',
-  timestamps: false,
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+  deletedAt: 'deleted_at',
+  paranoid: true,
 });
 
 Channel.belongsTo(Server, { foreignKey: 'server_id' });

@@ -26,14 +26,20 @@ const Server = sequelize.define('Server', {
   created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
+    field: 'created_at'
   },
   updated_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
+    field: 'updated_at'
   },
 }, {
   tableName: 'servers',
-  timestamps: false,
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+  deletedAt: 'deleted_at',
+  paranoid: true,
 });
 
 Server.belongsTo(User, { foreignKey: 'owner_id' });

@@ -12,7 +12,7 @@ export const config = {
     }
   },
   jwt: {
-    secret: process.env.JWT_SECRET || 'your-secret-key',
+    secret: process.env.JWT_SECRET,
     accessExpiresIn: '15m',
     refreshExpiresIn: '7d'
   },
@@ -22,5 +22,8 @@ export const config = {
   cors: {
     origin: process.env.CORS_ORIGIN || '*',
     credentials: true
+  },
+  redis: {
+    url: process.env.REDIS_URL || 'redis://localhost:6379'
   }
 };

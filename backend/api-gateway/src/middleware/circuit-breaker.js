@@ -93,7 +93,9 @@ export const circuitBreakers = {
   serverManagement: new ServiceCircuitBreaker(config.SERVICES.SERVER_MANAGEMENT.URL)
 };
 
-export const circuitBreaker = (req, res, next) => {
-  // Default middleware implementation
-  next();
+export const circuitBreaker = (serviceName, route) => {
+  if (!circuitBreakers[serviceName]) {
+    throw new Error(`Circuit breaker not configured for service: ${serviceName}`);
+  }
+  return circuitBreakers[serviceName].middleware(route);
 };
