@@ -49,4 +49,4 @@ const Channel = sequelize.define('Channel', {
 Channel.belongsTo(Server, { foreignKey: 'server_id' });
 
 module.exports.Channel = Channel;
-module.exports = Channel;
+
