@@ -75,6 +75,9 @@ app.get('/metrics', async (req, res) => {
   res.end(await prometheus.register.metrics());
 });
 
+// Error handler middleware
+app.use(errorHandler);
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ message: 'Endpoint bulunamadı' });

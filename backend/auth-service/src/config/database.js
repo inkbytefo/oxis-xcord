@@ -1,12 +1,18 @@
 import { Sequelize } from 'sequelize';
+import { config } from './index.js';
 
-const sequelize = new Sequelize({
-  dialect: 'postgres',
-  host: process.env.DB_HOST || 'db',
-  port: process.env.DB_PORT || 5432,
-  database: process.env.DB_NAME || 'xcord_db',
-  username: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres'
+const sequelize = new Sequelize(config.database.url, {
+  ...config.database.options,
+  logging: (msg) => {
+    if (config.env === 'development') {
+      console.log(msg);
+    }
+  },
+  define: {
+    underscored: true,
+    timestamps: true,
+    paranoid: true
+  }
 });
 
-export default sequelize;
+export { sequelize };

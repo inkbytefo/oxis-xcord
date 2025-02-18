@@ -1,62 +1,135 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import { Redis } from 'ioredis';
 import { config } from './config/index.js';
-import authRoutes from './routes/auth.js';
-import { errorHandler, logRequest, logger } from './middleware/error.js';
-import sequelize from './config/database.js';
+import authRoutes from './routes/auth.routes.js';
+import { errorHandler } from './middleware/error.middleware.js';
+import { setupMetrics } from './utils/metrics.js';
+import logger from './utils/logger.js';
 
-// Load environment variables
-dotenv.config();
-
+// Express uygulamasını oluştur
 const app = express();
 
-// Middleware
-app.use(cors(config.cors));
-app.use(express.json());
-app.use(logRequest);
+// Redis bağlantısı
+const redis = new Redis(config.redis.url);
+redis.on('error', (err) => {
+  logger.error('Redis bağlantı hatası:', err);
+});
+redis.on('connect', () => {
+  logger.info('Redis bağlantısı başarılı');
+});
 
-// Database connection
-sequelize.authenticate()
-  .then(() => {
-    logger.info('Connected to PostgreSQL database');
-    return sequelize.sync();
-  })
-  .then(() => {
-    logger.info('Database synchronized');
-  })
-  .catch(err => {
-    logger.error('Database connection error:', err);
-    process.exit(1);
-  });
+// Temel middleware'ler
+app.use(helmet()); // Güvenlik başlıkları
+app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } })); // Loglama
+app.use(express.json()); // JSON request body parsing
+app.use(express.urlencoded({ extended: true })); // URL-encoded request body parsing
 
-// Health check
+// CORS yapılandırması
+app.use(cors({
+  origin: config.server.cors.origin,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-ID', 'X-2FA-Token'],
+  exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
+  credentials: true
+}));
+
+// Metrics kurulumu (Prometheus)
+if (config.metrics.enabled) {
+  setupMetrics(app);
+}
+
+// Health check endpoint'i
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok',
-    service: 'auth-service',
+  res.json({
+    status: 'UP',
+    version: process.env.npm_package_version,
     timestamp: new Date().toISOString()
   });
 });
 
-// Routes
+// Ana route'lar
 app.use('/api/auth', authRoutes);
 
-// Error handling
+// 404 handler
+app.use((req, res, next) => {
+  res.status(404).json({
+    error: {
+      code: 'NOT_FOUND',
+      message: 'İstenen kaynak bulunamadı'
+    }
+  });
+});
+
+// Error handler
 app.use(errorHandler);
 
-// Start server
-app.listen(config.port, () => {
-  logger.info(`Auth service running on port ${config.port}`);
-});
+// Graceful shutdown
+const gracefulShutdown = async (signal) => {
+  logger.info(`${signal} alındı. Uygulama kapatılıyor...`);
 
-// Handle uncaught errors
+  // HTTP sunucusunu kapat
+  server.close(() => {
+    logger.info('HTTP sunucusu kapatıldı');
+  });
+
+  // Redis bağlantısını kapat
+  await redis.quit();
+  logger.info('Redis bağlantısı kapatıldı');
+
+  // Veritabanı bağlantısını kapat
+  try {
+    await sequelize.close();
+    logger.info('Veritabanı bağlantısı kapatıldı');
+  } catch (error) {
+    logger.error('Veritabanı bağlantısı kapatılırken hata:', error);
+  }
+
+  // Prometheus metrikleri temizleme
+  if (config.metrics.enabled) {
+    clearMetrics();
+  }
+
+  process.exit(0);
+};
+
+// Shutdown sinyallerini dinle
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Yakalanmamış hataları logla
 process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception:', error);
-  process.exit(1);
+  logger.error('Yakalanmamış hata:', error);
+  gracefulShutdown('uncaughtException');
 });
 
-process.on('unhandledRejection', (error) => {
-  logger.error('Unhandled Rejection:', error);
-  process.exit(1);
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('İşlenmemiş promise reddi:', reason);
+  gracefulShutdown('unhandledRejection');
 });
+
+// Sunucuyu başlat
+const server = app.listen(config.server.port, () => {
+  logger.info(`Auth servisi ${config.server.port} portunda çalışıyor (${config.env} modu)`);
+});
+
+// Veritabanı bağlantısını kontrol et
+import { sequelize } from './models/User.js';
+
+sequelize
+  .authenticate()
+  .then(() => {
+    logger.info('Veritabanı bağlantısı başarılı');
+    // Tabloları senkronize et (development modunda)
+    if (config.env === 'development') {
+      return sequelize.sync({ alter: true });
+    }
+  })
+  .catch((error) => {
+    logger.error('Veritabanı bağlantı hatası:', error);
+    process.exit(1);
+  });
+
+export default app;

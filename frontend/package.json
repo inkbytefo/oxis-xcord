@@ -20,15 +20,14 @@
     "@tauri-apps/api": "^2.2.0",
     "@tauri-apps/cli": "^2.2.7",
     "@types/react-router-dom": "^5.3.3",
+    "axios": "^1.6.7",
     "framer-motion": "^10.18.0",
     "mediasoup-client": "^3.8.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.1.5",
     "simple-peer": "^9.11.1",
-    "socket.io-client": "^4.8.1",
-    "winston": "^3.17.0",
-    "winston-transport": "^4.9.0"
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",

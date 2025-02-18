@@ -1,90 +1,88 @@
-import winston from 'winston';
-import Transport from 'winston-transport';
-import net from 'net';
+interface LoggerOptions {
+  level: LogLevel;
+  prefix?: string;
+}
 
-class TCPTransport extends Transport {
-  host: string;
-  port: number;
-  net: typeof net;
-  client: net.Socket | null;
-  retrying: boolean;
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-  constructor(opts: { host?: string; port?: number; level?: string }) {
-    super(opts);
-    this.host = opts.host || 'logstash';
-    this.port = opts.port || 5000;
-    this.net = net;
-    this.client = null;
-    this.retrying = false;
-    this.connectToLogstash();
+class Logger {
+  private static instance: Logger;
+  private logLevel: LogLevel;
+  private prefix: string;
+
+  private constructor(options: LoggerOptions) {
+    this.logLevel = options.level;
+    this.prefix = options.prefix || '[App]';
   }
 
-  connectToLogstash() {
-    this.client = new this.net.Socket();
-
-    this.client.on('error', (err: Error) => {
-      console.error('TCP Transport Error:', err);
-      if (!this.retrying) {
-        this.retrying = true;
-        setTimeout(() => {
-          this.retrying = false;
-          this.connectToLogstash();
-        }, 5000);
-      }
-    });
-
-    this.client.connect(this.port, this.host, () => {
-      console.log('Connected to Logstash');
-    });
-  }
-
-  log(info: winston.LogEntry, callback: () => void) {
-    setImmediate(() => {
-      this.emit('logged', info);
-    });
-
-    if (this.client && this.client.writable) {
-      const logEntry = {
-        ...info,
-        service: 'frontend',
-        environment: process.env.NODE_ENV,
-        timestamp: new Date().toISOString()
-      };
-
-      this.client.write(JSON.stringify(logEntry) + '\n');
+  static getInstance(options: LoggerOptions = { level: 'info' }): Logger {
+    if (!this.instance) {
+      this.instance = new Logger(options);
     }
+    return this.instance;
+  }
 
-    callback();
+  private getTimestamp(): string {
+    return new Date().toISOString();
+  }
+
+  private formatMessage(level: string, message: string, ...args: any[]): string {
+    return `${this.prefix} [${level.toUpperCase()}] ${this.getTimestamp()}: ${message}`;
+  }
+
+  private shouldLog(level: LogLevel): boolean {
+    const levels: Record<LogLevel, number> = {
+      debug: 0,
+      info: 1,
+      warn: 2,
+      error: 3
+    };
+    return levels[level] >= levels[this.logLevel];
+  }
+
+  debug(message: string, ...args: any[]): void {
+    if (this.shouldLog('debug')) {
+      console.debug(this.formatMessage('debug', message), ...args);
+    }
+  }
+
+  info(message: string, ...args: any[]): void {
+    if (this.shouldLog('info')) {
+      console.info(this.formatMessage('info', message), ...args);
+    }
+  }
+
+  warn(message: string, ...args: any[]): void {
+    if (this.shouldLog('warn')) {
+      console.warn(this.formatMessage('warn', message), ...args);
+    }
+  }
+
+  error(message: string, error?: Error, ...args: any[]): void {
+    if (this.shouldLog('error')) {
+      console.error(
+        this.formatMessage('error', message),
+        error ? `\nError: ${error.message}\nStack: ${error.stack}` : '',
+        ...args
+      );
+    }
+  }
+
+  setLevel(level: LogLevel): void {
+    this.logLevel = level;
+  }
+
+  getLevel(): LogLevel {
+    return this.logLevel;
   }
 }
 
-// Log formatını yapılandır
-const logFormat = winston.format.combine(
-  winston.format.timestamp(),
-  winston.format.errors({ stack: true }),
-  winston.format.json()
-);
+// import.meta.env kullanarak Vite ortam değişkenlerine erişim
+const isDevelopment = import.meta.env.DEV;
 
-// Logger'ı oluştur
-const logger = winston.createLogger({
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-  format: logFormat,
-  defaultMeta: { service: 'frontend' },
-  transports: [
-    // Konsol transport'u (geliştirme ortamı için)
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      )
-    }),
-    // TCP transport'u (Logstash'e gönderim)
-    new TCPTransport({
-      host: 'logstash',
-      port: 5000,
-      level: 'info'
-    })
-  ]
+export const logger = Logger.getInstance({
+  level: isDevelopment ? 'debug' : 'error',
+  prefix: '[Auth]'
 });
 
-export default logger;
+export type { LogLevel, LoggerOptions };

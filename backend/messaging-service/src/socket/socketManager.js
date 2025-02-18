@@ -2,7 +2,9 @@ import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import config from '../config.js';
 import { logger } from '../utils/logger.js';
-import { RoomManager } from '../utils/redis.js';
+import { getRedisConnection } from '../utils/redis.js';
+
+const redis = getRedisConnection();
 
 class SocketManager {
   constructor(server) {
@@ -15,9 +17,8 @@ class SocketManager {
       path: '/socket.io'
     });
 
-    this.userSockets = new Map(); // userId -> Set<socketId>
-    this.roomSockets = new Map(); // roomId -> Set<userId>
-    
+    // Weak referanslar kullanarak bellek sızıntısını önle
+    this.userSockets = new WeakMap();
     this.setupMiddleware();
     this.setupEventHandlers();
   }
@@ -32,16 +33,23 @@ class SocketManager {
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         socket.user = decoded;
+
+        // Kullanıcının aktif oturumlarını kontrol et
+        const activeSessions = await this.getUserActiveSessions(decoded.id);
+        if (!activeSessions.includes(socket.handshake.auth.sessionId)) {
+          return next(new Error('Geçersiz oturum'));
+        }
+
         next();
       } catch (error) {
-        next(new Error('Geçersiz token'));
+        logger.error('Socket auth hatası:', error);
+        next(new Error('Kimlik doğrulama başarısız'));
       }
     });
   }
 
   setupEventHandlers() {
     this.io.on('connection', (socket) => {
-      logger.info(`Kullanıcı bağlandı: ${socket.user.id}`);
       this.handleConnection(socket);
 
       socket.on('join-room', (roomId) => this.handleJoinRoom(socket, roomId));
@@ -49,134 +57,186 @@ class SocketManager {
       socket.on('send-message', (data) => this.handleSendMessage(socket, data));
       socket.on('typing', (data) => this.handleTyping(socket, data));
       socket.on('disconnect', () => this.handleDisconnect(socket));
+      
+      // Bağlantı hatası durumunda cleanup
+      socket.on('error', (error) => {
+        logger.error('Socket hatası:', error);
+        this.handleDisconnect(socket);
+      });
     });
   }
 
-  handleConnection(socket) {
+  async handleConnection(socket) {
     const userId = socket.user.id;
-    logger.info(`Kullanıcı bağlandı: ${userId}`);
+    try {
+      await this.addUserSocket(userId, socket.id);
+      logger.info(`Kullanıcı bağlandı: ${userId}`);
+    } catch (error) {
+      logger.error('Bağlantı hatası:', error);
+      socket.disconnect(true);
+    }
   }
 
   async handleJoinRoom(socket, roomId) {
     const userId = socket.user.id;
+    const multi = redis.multi();
+
     try {
-      const added = await RoomManager.addUserToRoom(roomId, userId);
-      if (!added) {
-        logger.error(`Redis'e kullanıcı eklenemedi: ${userId} odaya: ${roomId}`);
-        return;
+      // Atomic işlemlerle oda yönetimi
+      multi.sadd(`room:${roomId}:users`, userId);
+      multi.sadd(`user:${userId}:rooms`, roomId);
+      const results = await multi.exec();
+
+      if (!results || results.some(result => !result[1])) {
+        throw new Error('Oda işlemi başarısız');
       }
-      socket.join(roomId);
+
+      await socket.join(roomId);
       logger.info(`Kullanıcı ${userId} odaya katıldı: ${roomId}`);
 
-      // Odadaki diğer kullanıcılara bildir
-      const roomUsers = await RoomManager.getRoomUsers(roomId);
-      socket.to(roomId).emit('user-joined', {
-        userId: userId,
+      const roomUsers = await this.getRoomUsers(roomId);
+      this.io.to(roomId).emit('user-joined', {
+        userId,
         username: socket.user.username,
-        roomUsers: roomUsers
+        roomUsers
       });
+
     } catch (error) {
-      logger.error('handleJoinRoom error:', error);
+      logger.error('handleJoinRoom hatası:', error);
+      socket.emit('error', { message: 'Odaya katılma başarısız' });
     }
   }
 
   async handleLeaveRoom(socket, roomId) {
     const userId = socket.user.id;
+    const multi = redis.multi();
+
     try {
-      const removed = await RoomManager.removeUserFromRoom(roomId, userId);
-      if (!removed) {
-        logger.error(`Redis'ten kullanıcı silinemedi: ${userId} odadan: ${roomId}`);
-        return;
+      // Atomic işlemlerle oda çıkışı
+      multi.srem(`room:${roomId}:users`, userId);
+      multi.srem(`user:${userId}:rooms`, roomId);
+      const results = await multi.exec();
+
+      if (!results || results.some(result => !result[1])) {
+        throw new Error('Oda çıkış işlemi başarısız');
       }
-      socket.leave(roomId);
+
+      await socket.leave(roomId);
       logger.info(`Kullanıcı ${userId} odadan ayrıldı: ${roomId}`);
 
-      // Odadaki diğer kullanıcılara bildir
-      const roomUsers = await RoomManager.getRoomUsers(roomId);
-      socket.to(roomId).emit('user-left', {
-        userId: userId,
+      const roomUsers = await this.getRoomUsers(roomId);
+      this.io.to(roomId).emit('user-left', {
+        userId,
         username: socket.user.username,
-        roomUsers: roomUsers
+        roomUsers
       });
+
     } catch (error) {
-      logger.error('handleLeaveRoom error:', error);
+      logger.error('handleLeaveRoom hatası:', error);
+      socket.emit('error', { message: 'Odadan çıkış başarısız' });
     }
   }
 
-  handleSendMessage(socket, { roomId, content, type = 'text' }) {
+  async handleSendMessage(socket, { roomId, content, type = 'text' }) {
     const userId = socket.user.id;
-    RoomManager.isUserInRoom(roomId, userId)
-      .then(isInRoom => {
-        if (!isInRoom) {
-          logger.warn(`Kullanıcı ${userId} odada değil: ${roomId}`);
-          return;
-        }
+    
+    try {
+      // Atomic işlemle oda üyeliği kontrolü
+      const isMember = await redis.sismember(`room:${roomId}:users`, userId);
+      if (!isMember) {
+        throw new Error('Kullanıcı odada değil');
+      }
 
-        const message = {
-          id: Date.now().toString(),
-          userId: userId,
-          username: socket.user.username,
-          content,
-          type,
-          timestamp: new Date().toISOString()
-        };
+      const message = {
+        id: Date.now().toString(),
+        userId,
+        username: socket.user.username,
+        content,
+        type,
+        timestamp: new Date().toISOString()
+      };
 
-        // Mesajı odadaki tüm kullanıcılara gönder
-        this.io.to(roomId).emit('new-message', message);
-      })
-      .catch(error => {
-        logger.error('isUserInRoom error:', error);
-      });
+      // Mesaj geçmişini sakla
+      await redis.lpush(`room:${roomId}:messages`, JSON.stringify(message));
+      await redis.ltrim(`room:${roomId}:messages`, 0, 99); // Son 100 mesajı tut
+
+      this.io.to(roomId).emit('new-message', message);
+
+    } catch (error) {
+      logger.error('handleSendMessage hatası:', error);
+      socket.emit('error', { message: 'Mesaj gönderme başarısız' });
+    }
   }
 
   handleTyping(socket, { roomId, isTyping }) {
-    socket.to(roomId).emit('user-typing', {
-      userId: socket.user.id,
-      username: socket.user.username,
-      isTyping
-    });
+    const userId = socket.user.id;
+    
+    redis.sismember(`room:${roomId}:users`, userId)
+      .then(isMember => {
+        if (isMember) {
+          socket.to(roomId).emit('user-typing', {
+            userId,
+            username: socket.user.username,
+            isTyping
+          });
+        }
+      })
+      .catch(error => {
+        logger.error('handleTyping hatası:', error);
+      });
   }
 
   async handleDisconnect(socket) {
-    const userId = socket.user.id;
-    logger.info(`Kullanıcı ayrıldı: ${userId}`);
+    const userId = socket.user?.id;
+    if (!userId) return;
 
     try {
-      const userRooms = await RoomManager.getUserRooms(userId);
-      if (userRooms && userRooms.length > 0) {
-        for (const roomId of userRooms) {
-          await RoomManager.removeUserFromRoom(roomId, userId);
-          socket.leave(roomId);
-          // Odaya katılan kullanıcılara bildirim gönder
-          const roomUsers = await RoomManager.getRoomUsers(roomId);
-          socket.to(roomId).emit('user-left', {
-            userId: userId,
-            username: socket.user.username,
-            roomUsers: roomUsers
-          });
-        }
+      // Kullanıcının tüm odalardan çıkışını sağla
+      const userRooms = await redis.smembers(`user:${userId}:rooms`);
+      const multi = redis.multi();
+
+      for (const roomId of userRooms) {
+        multi.srem(`room:${roomId}:users`, userId);
+        multi.srem(`user:${userId}:rooms`, roomId);
+        
+        this.io.to(roomId).emit('user-left', {
+          userId,
+          username: socket.user.username
+        });
       }
+
+      await multi.exec();
+      await this.removeUserSocket(userId, socket.id);
+      logger.info(`Kullanıcı ayrıldı: ${userId}`);
+
     } catch (error) {
-      logger.error('handleDisconnect error:', error);
+      logger.error('handleDisconnect hatası:', error);
     }
   }
 
-  broadcastUserStatus(userId, status) {
-    this.io.emit('user-status-change', {
-      userId,
-      status,
-      timestamp: new Date().toISOString()
-    });
+  // Yardımcı metodlar
+  async addUserSocket(userId, socketId) {
+    await redis.sadd(`user:${userId}:sockets`, socketId);
+  }
+
+  async removeUserSocket(userId, socketId) {
+    await redis.srem(`user:${userId}:sockets`, socketId);
+  }
+
+  async getUserActiveSessions(userId) {
+    return await redis.smembers(`user:${userId}:sessions`);
+  }
+
+  async getRoomUsers(roomId) {
+    return await redis.smembers(`room:${roomId}:users`);
   }
 
   // Belirli bir kullanıcıya mesaj gönderme
-  sendToUser(userId, event, data) {
-    const userSockets = this.userSockets.get(userId);
-    if (userSockets) {
-      userSockets.forEach(socketId => {
-        this.io.to(socketId).emit(event, data);
-      });
-    }
+  async sendToUser(userId, event, data) {
+    const socketIds = await redis.smembers(`user:${userId}:sockets`);
+    socketIds.forEach(socketId => {
+      this.io.to(socketId).emit(event, data);
+    });
   }
 
   // Belirli bir odaya mesaj gönderme

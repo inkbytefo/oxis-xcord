@@ -1,24 +1,41 @@
-import Redis from 'ioredis';
-import { logger } from '../utils/logger.js';
+import { Redis } from 'ioredis';
+import { config } from './index.js';
 
-const redisConfig = {
-  host: process.env.REDIS_HOST || 'redis',
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD,
-  retryStrategy: (times) => {
-    const delay = Math.min(times * 50, 2000);
-    return delay;
+class RedisConnectionPool {
+  constructor() {
+    this.pool = null;
+    this.options = {
+      host: config.redis.host,
+      port: config.redis.port,
+      password: config.redis.password,
+      db: config.redis.db,
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
+      retryStrategy: (times) => {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+      }
+    };
   }
-};
 
-const redis = new Redis(redisConfig);
+  getConnection() {
+    if (!this.pool) {
+      this.pool = new Redis({
+        ...this.options,
+        keyPrefix: config.redis.prefix
+      });
 
-redis.on('error', (err) => {
-  logger.error('Redis connection error:', err);
-});
+      this.pool.on('error', (error) => {
+        console.error('Redis bağlantı hatası:', error);
+      });
 
-redis.on('connect', () => {
-  logger.info('Successfully connected to Redis');
-});
+      this.pool.on('connect', () => {
+        console.info('Redis bağlantısı kuruldu');
+      });
+    }
+    return this.pool;
+  }
+}
 
-export default redis;
+export const redisPool = new RedisConnectionPool();
+export const getRedisConnection = () => redisPool.getConnection();

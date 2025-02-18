@@ -8,7 +8,7 @@ Auth Service, XCord platformunun kullanıcı kimlik doğrulama ve yetkilendirme 
 
 - JWT tabanlı kimlik doğrulama
 - İki faktörlü kimlik doğrulama (2FA)
-- OAuth2.0 entegrasyonu
+- OAuth2.0 entegrasyonu (Google ve GitHub)
 - Oturum yönetimi
 - Rol tabanlı yetkilendirme (RBAC)
 - Şifre sıfırlama ve değiştirme
@@ -27,6 +27,10 @@ GET  /auth/me          // Kullanıcı bilgileri
 PUT  /auth/profile     // Profil güncelleme
 POST /auth/2fa/enable  // 2FA aktivasyonu
 POST /auth/2fa/verify  // 2FA doğrulama
+
+// OAuth endpoints
+GET  /auth/google      // Google ile giriş
+GET  /auth/github      // GitHub ile giriş
 ```
 
 ### Veritabanı Şeması
@@ -39,6 +43,8 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     two_factor_enabled BOOLEAN DEFAULT FALSE,
     two_factor_secret VARCHAR(32),
+    google_id VARCHAR(255),
+    github_id VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP
@@ -99,6 +105,18 @@ CREATE TABLE user_sessions (
   "redis": {
     "url": process.env.REDIS_URL,
     "prefix": "auth:"
+  },
+  "oauth": {
+    "google": {
+      "clientId": process.env.GOOGLE_CLIENT_ID,
+      "clientSecret": process.env.GOOGLE_CLIENT_SECRET,
+      "callbackUrl": process.env.GOOGLE_CALLBACK_URL
+    },
+    "github": {
+      "clientId": process.env.GITHUB_CLIENT_ID,
+      "clientSecret": process.env.GITHUB_CLIENT_SECRET,
+      "callbackUrl": process.env.GITHUB_CALLBACK_URL
+    }
   }
 }
 ```
@@ -121,6 +139,10 @@ DATABASE_URL=postgresql://user:pass@localhost:5432/auth_db
 REDIS_URL=redis://localhost:6379
 JWT_ACCESS_SECRET=your_access_secret
 JWT_REFRESH_SECRET=your_refresh_secret
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
 ```
 
 ### Test
@@ -148,7 +170,6 @@ npm run test:coverage
 ### Loglama
 
 ```javascript
-// Winston logger konfigürasyonu
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.json(),
