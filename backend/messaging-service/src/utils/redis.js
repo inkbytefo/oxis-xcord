@@ -78,4 +78,5 @@ export const RoomManager = {
   }
 };
 
+export const getRedisConnection = () => redis;
 export default redis;

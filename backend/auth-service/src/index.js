@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { Redis } from 'ioredis';
 import { config } from './config/index.js';
+import { sequelize } from './models/User.js';
 import authRoutes from './routes/auth.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { setupMetrics } from './utils/metrics.js';

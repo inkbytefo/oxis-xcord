@@ -48,4 +48,5 @@ const config = {
   }
 };
 
-export default config;
+export const config = config;
+

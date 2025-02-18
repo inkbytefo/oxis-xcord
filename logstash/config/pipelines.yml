@@ -1,0 +1,2 @@
+- pipeline.id: xcord
+  path.config: "/etc/logstash/pipeline/xcord.conf"
