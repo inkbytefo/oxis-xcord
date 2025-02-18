@@ -1,5 +1,3 @@
-
-
 import jwt from 'jsonwebtoken';
 import { authenticator } from 'otplib';
 import crypto from 'crypto';
@@ -19,17 +17,7 @@ const redis = new Redis(config.redis.url);
 
 class AuthService {
   // Şifre politikası kontrolü
-  #validatePassword(password: string): void {
-    if (!validation.password.test(password)) {
-      throw new AuthenticationError(
-        'INVALID_PASSWORD',
-        'Şifre politikası gereksinimlerini karşılamıyor'
-      );
-    }
-  }
-
-  // Şifre politikası kontrolü
-  #validatePassword(password: string): void {
+  #validatePassword(password) {
     if (!validation.password.test(password)) {
       throw new AuthenticationError(
         'INVALID_PASSWORD',
@@ -197,7 +185,7 @@ class AuthService {
   }
 
   // Profil güncelleme
-  async updateProfile(userId: string, data: any) {
+  async updateProfile(userId, data) {
     const user = await this.#getUserById(userId);
 
     if (data.password) {
@@ -288,8 +276,3 @@ class AuthService {
 }
 
 export const authService = new AuthService();
-
-export const authService = new AuthService();
-```
-
-Şimdi, bu değişiklikleri uygulayacağım.

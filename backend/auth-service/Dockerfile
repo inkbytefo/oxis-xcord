@@ -3,10 +3,10 @@ FROM node:20-alpine
 WORKDIR /app
 
 # package.json ve package-lock.json dosyalarını kopyala
-COPY package*.json ./
+COPY backend/auth-service/package*.json ./
 
 # Bağımlılıkları yükle
-RUN npm install --production
+RUN npm install
 
 # Güvenlik için bcrypt ve crypto modülleri için gerekli paketleri yükle
 RUN apk add --no-cache \
@@ -15,7 +15,7 @@ RUN apk add --no-cache \
     g++
 
 # Kaynak kodları kopyala
-COPY . .
+COPY backend/auth-service/ .
 
 # TypeScript kodunu derle
 RUN npm run build
@@ -28,4 +28,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 EXPOSE 3001
 
 # Uygulamayı başlat
-CMD ["node", "dist/index.js"]
+CMD ["node", "build/index.js"]
