@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # API Gateway
   api-gateway:
     build: ./api-gateway
     ports:
@@ -17,51 +18,69 @@ services:
       - voice-service
       - server-management-service
 
+  # Auth Service
   auth-service:
     build: ./auth-service
     ports:
       - "3001:3001"
     environment:
       - NODE_ENV=development
+      - PORT=3001
       - MONGODB_URI=mongodb://mongodb:27017/auth
-      - JWT_SECRET=your_jwt_secret
+      - JWT_ACCESS_SECRET=your_jwt_access_secret
+      - JWT_REFRESH_SECRET=your_jwt_refresh_secret
+      - REDIS_URL=redis://redis:6379
     depends_on:
       - mongodb
+      - redis
 
+  # Messaging Service
   messaging-service:
     build: ./messaging-service
     ports:
       - "3002:3002"
     environment:
       - NODE_ENV=development
+      - PORT=3002
       - MONGODB_URI=mongodb://mongodb:27017/messaging
       - REDIS_URL=redis://redis:6379
+      - AUTH_SERVICE_URL=http://auth-service:3001
     depends_on:
       - mongodb
       - redis
+      - auth-service
 
+  # Voice Service
   voice-service:
     build: ./voice-service
     ports:
       - "3003:3003"
     environment:
       - NODE_ENV=development
+      - PORT=3003
       - REDIS_URL=redis://redis:6379
+      - TURN_USERNAME=your_turn_username
+      - TURN_PASSWORD=your_turn_password
     depends_on:
       - redis
 
+  # Server Management Service
   server-management-service:
     build: ./server-management-service
     ports:
       - "3004:3004"
     environment:
       - NODE_ENV=development
+      - PORT=3004
       - MONGODB_URI=mongodb://mongodb:27017/server-management
+      - AUTH_SERVICE_URL=http://auth-service:3001
     depends_on:
       - mongodb
+      - auth-service
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
+  # MongoDB
   mongodb:
     image: mongo:latest
     ports:
@@ -69,6 +88,7 @@ services:
     volumes:
       - mongodb_data:/data/db
 
+  # Redis
   redis:
     image: redis:latest
     ports:

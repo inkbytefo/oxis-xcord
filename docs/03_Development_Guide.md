@@ -1,315 +1,110 @@
-# Development Guide
+# Geliştirme Kılavuzu
 
-## Service Setup
+## 1. Ön Gereksinimler
 
-### Prerequisites
-- Node.js 18+ 
-- MongoDB 
-- Redis
-- Docker (optional)
+-   Node.js 18+
+-   MongoDB
+-   Redis
+-   Docker (Opsiyonel)
+-   Git
 
-### Environment Setup
-1. Clone the repository
-2. Copy `.env.example` to `.env` in each service directory
-3. Configure environment variables as needed
-4. Install dependencies in each service: `npm install`
+## 2. Geliştirme Ortamını Kurulumu
 
-## Running Services
+1.  **Depoyu Klona Alma:**
 
-### Development Mode
-Each service can be run individually in development mode:
+    ```bash
+    git clone https://github.com/xcord/xcord.git
+    cd xcord
+    ```
+
+2.  **Bağımlılıkları Yükleme:**
+
+    ```bash
+    # Frontend
+    cd frontend
+    npm install
+    cd ..
+
+    # Backend (Her servis için ayrı ayrı)
+    cd backend/auth-service
+    npm install
+    cd ../messaging-service
+    npm install
+    cd ../voice-service
+    npm install
+    cd ../server-management-service
+    npm install
+    cd ../api-gateway
+    npm install
+    cd ..
+    ```
+
+3.  **Ortam Değişkenlerini Ayarlama:**
+
+    -   Her servis için `.env.example` dosyasını `.env` olarak kopyalayın ve gerekli bilgileri doldurun.
+    -   Özellikle veritabanı, Redis ve JWT secret key'leri gibi hassas bilgileri doğru ayarladığınızdan emin olun.
+
+4.  **Docker ile Çalıştırma (Opsiyonel):**
+
+    ```bash
+    docker-compose up --build
+    ```
+
+    Bu komut, tüm backend servislerini, MongoDB ve Redis'i başlatacaktır. Frontend'i çalıştırmak için, frontend dizininde `npm run dev` komutunu çalıştırabilirsiniz.
+
+## 3. Servisleri Çalıştırma
+
+### 3.1 Geliştirme Modu
+
+Her servis, geliştirme modunda ayrı ayrı çalıştırılabilir:
 
 ```bash
 cd backend/[service-name]
 npm run dev
 ```
 
-### Using Docker
+### 3.2 Docker ile Çalıştırma
+
 ```bash
-docker-compose up
+docker-compose up -d
 ```
 
-## Service-Specific Guidelines
+Bu komut, `docker-compose.yml` dosyasında tanımlanan tüm servisleri başlatır.
 
-### API Gateway (Port 3000)
-- Entry point for all external requests
-- Configure routes in `src/routes/`
-- Add new service proxies in `src/config.js`
+## 4. Servis Kılavuzları
 
-### Auth Service (Port 3001)
-- Handles user authentication
-- JWT token validation
-- User management APIs
-- Configure JWT settings in `.env`
+Her bir servis için ayrıntılı geliştirme kılavuzları, aşağıdaki dokümanlarda bulunabilir:
 
-### Messaging Service (Port 3002)
+-   [Auth Service](docs/services/auth-service.md)
+-   [Messaging Service](docs/services/messaging-service.md)
+-   [Voice Service](docs/services/voice-service.md)
+-   [Server Management Service](docs/services/server-management-service.md)
+-   [API Gateway](backend/api-gateway/README.md) (Henüz dokümante edilmedi)
 
-#### Setup
-1. Configure environment variables:
-   ```
-   PORT=3002
-   MONGODB_URI=mongodb://localhost:27017/messaging
-   REDIS_URL=redis://localhost:6379
-   ENCRYPTION_KEY=your-32-byte-key
-   AUTH_SERVICE_URL=http://localhost:3001
-   ```
+## 5. Ortam Değişkenleri
 
-2. Start dependencies:
-   ```bash
-   # Start MongoDB
-   mongod
+Servislerin yapılandırılması için kullanılan ortam değişkenleri, her servisin `.env` dosyasında tanımlanır. Örnek bir `.env` dosyası:
 
-   # Start Redis
-   redis-server
-   ```
-
-#### Features
-- Real-time messaging using WebSocket
-- Message encryption
-- Room-based and direct messaging
-- Message delivery status and read receipts
-
-#### Development Guidelines
-
-1. **WebSocket Events**
-   - Use Socket.IO for real-time communication
-   - Handle events in `socket.on()` handlers
-   - Implement proper error handling
-   - Use rate limiting for message sending
-
-2. **Security**
-   - All messages must be encrypted
-   - Validate user authentication
-   - Implement rate limiting
-   - Sanitize user inputs
-
-3. **Message Storage**
-   - Use MongoDB for persistence
-   - Use Redis for caching
-   - Implement proper indexes
-   - Handle large message volumes
-
-4. **Testing**
-   ```bash
-   # Run tests
-   npm test
-
-   # Test WebSocket connections
-   wscat -c ws://localhost:3002
-   ```
-
-#### Common Tasks
-
-1. Implementing new message types:
-   ```javascript
-   // Add to messageSchema in models
-   // Add validation in middleware
-   // Add handler in socket events
-   ```
-
-2. Adding new API endpoints:
-   ```javascript
-   // Add validation middleware
-   // Add rate limiting
-   // Add route handler
-   // Add error handling
-   ```
-
-3. Monitoring:
-   - Check logs in `error.log` and `combined.log`
-   - Monitor Redis memory usage
-   - Check MongoDB performance
-
-### Voice Service (Port 3003)
-
-#### Setup
-1. Configure environment variables:
-   ```
-   PORT=3003
-   ```
-
-2. Start the service:
-   ```bash
-   cd backend/voice-service
-   npm install
-   npm run dev
-   ```
-
-#### Features
-- Real-time voice communication using WebRTC
-- Peer-to-peer audio streaming
-- Room-based user management
-- Optimized audio quality:
-  - Echo cancellation
-  - Noise suppression
-  - Auto gain control
-  - High-quality audio settings (48kHz, 16-bit)
-
-#### Development Guidelines
-
-1. **WebRTC Integration**
-   - Use Socket.IO for signaling
-   - Handle peer connections with simple-peer
-   - Manage room-based peer groups
-   - Implement proper connection cleanup
-
-2. **Audio Quality**
-   - Configure audio constraints:
-   ```javascript
-   const audioConstraints = {
-     echoCancellation: true,
-     noiseSuppression: true,
-     autoGainControl: true,
-     channelCount: 1,
-     sampleRate: 48000,
-     sampleSize: 16
-   };
-   ```
-   - Monitor audio stream quality
-   - Handle audio device changes
-
-3. **Connection Management**
-   - Handle peer connection states
-   - Implement reconnection logic
-   - Clean up resources on disconnect
-   - Monitor connection quality
-
-4. **Testing Voice Features**
-   ```bash
-   # Run service tests
-   npm test
-
-   # Test WebRTC connection
-   npm run test:webrtc
-
-   # Monitor audio metrics
-   npm run metrics
-   ```
-
-5. **Common Tasks**
-   - Adding new room features:
-   ```javascript
-   // Add room management logic
-   // Handle room events
-   // Implement room state management
-   ```
-   
-   - Implementing audio controls:
-   ```javascript
-   // Add mute/unmute functionality
-   // Handle audio device selection
-   // Implement volume controls
-   ```
-
-6. **Monitoring**
-   - Check WebRTC connection stats
-   - Monitor audio quality metrics
-   - Track room participation
-   - Log connection issues
-
-7. **Security Considerations**
-   - Validate room access
-   - Secure WebRTC connections
-   - Rate limit connection attempts
-   - Implement proper authentication
-
-### Server Management Service (Port 3004)
-- Server provisioning
-- Resource monitoring
-- Configuration management
-
-## Testing
-
-### Unit Tests
-```bash
-npm test
+```env
+NODE_ENV=development
+PORT=3001
+MONGODB_URI=mongodb://mongodb:27017/auth
+REDIS_URL=redis://redis:6379
+JWT_ACCESS_SECRET=your_access_secret
+JWT_REFRESH_SECRET=your_refresh_secret
 ```
 
-### Integration Tests
+## 6. Test
+
+Her servis için test komutları, ilgili servislerin `package.json` dosyalarında tanımlanmıştır. Örneğin:
+
 ```bash
-npm run test:integration
+# Auth Service için testleri çalıştır
+cd backend/auth-service
+npm run test
 ```
 
-### Load Testing
-```bash
-npm run test:load
-```
+## 7. Kod Stili ve Git İş Akışı
 
-## Common Development Tasks
-
-### Adding New Features
-1. Create feature branch
-2. Implement changes
-3. Add tests
-4. Update documentation
-5. Create pull request
-
-### Debugging
-- Check service logs
-- Use debugging tools
-- Monitor service metrics
-- Check error tracking
-
-### Performance Optimization
-- Use profiling tools
-- Monitor database queries
-- Optimize API responses
-- Use caching effectively
-
-## Best Practices
-
-### Code Style
-- Follow ESLint configuration
-- Use TypeScript types
-- Write clear comments
-- Follow naming conventions
-
-### API Design
-- Use RESTful conventions
-- Document all endpoints
-- Include error responses
-- Version APIs appropriately
-
-### Security
-- Validate all inputs
-- Use proper authentication
-- Implement rate limiting
-- Follow security best practices
-
-### Logging
-- Use appropriate log levels
-- Include relevant context
-- Monitor error rates
-- Rotate log files
-
-## Deployment
-
-### Staging
-1. Build services
-2. Run integration tests
-3. Deploy to staging
-4. Verify functionality
-
-### Production
-1. Create release
-2. Update documentation
-3. Deploy services
-4. Monitor performance
-
-## Troubleshooting
-
-### Common Issues
-1. Connection errors
-   - Check service availability
-   - Verify network settings
-   - Check credentials
-
-2. Performance issues
-   - Monitor resource usage
-   - Check database queries
-   - Analyze API response times
-
-3. Authentication problems
-   - Verify JWT tokens
-   - Check service configuration
-   - Validate user credentials
+-   Kod yazım standartları için [Kod Yazım Standartları](docs/guides/code-style.md) dokümanına başvurun.
+-   Git iş akışı için [Git İş Akışı Kılavuzu](docs/guides/git-workflow.md) dokümanına başvurun.

@@ -1,154 +1,194 @@
-# XCord Project
+# XCord - Modern İletişim Platformu
 
 [![CI/CD Pipeline](https://github.com/inkbytefo/11/actions/workflows/ci.yml/badge.svg)](https://github.com/inkbytefo/11/actions/workflows/ci.yml)
 
-## Project Structure
+## Proje Yapısı
 
 ```
 xcord/
-├── frontend/           # Frontend application
-│   ├── css/           # Stylesheets
-│   ├── js/            # JavaScript files
-│   └── index.html     # Main HTML file
-├── services/          # Backend services
-│   ├── index.js       # Main server file
-│   └── package.json   # Backend dependencies
-├── docs/             # Project documentation
-└── memory-bank/      # Memory bank files
+├── frontend/           # Frontend uygulaması
+├── backend/            # Backend servisleri
+├── docs/               # Proje dokümantasyonu
+│   ├── 00_Documentation_Structure.md # Dokümantasyon yapısı
+│   ├── contributing/   # Katkı sağlama rehberleri
+│   ├── guides/         # Geliştirici rehberleri
+│   ├── operations/     # Operasyon rehberleri
+│   └── services/       # Servis dokümantasyonları
+├── docker-compose.yml  # Docker Compose yapılandırması
+└── .gitignore          # Git ignore dosyası
 ```
 
-## Docker Setup Instructions
+## Dokümantasyon
 
-### Prerequisites
-- Docker
-- Docker Compose
+Proje dokümantasyonu aşağıdaki klasörlerde bulunmaktadır:
 
-### Quick Start
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/inkbytefo/11.git
-   cd 11
-   ```
+-   **Proje Genel Bakışı:** `docs/01_Project_Overview.md`
+-   **Mimari:** `docs/02_Architecture.md`
+-   **Geliştirici Kılavuzu:** `docs/03_Development_Guide.md`
+-   **Test Stratejisi:** `docs/04_Testing_Strategy.md`
+-   **Dağıtım Kılavuzu:** `docs/05_Deployment_Guide.md`
+-   **İyileştirme Önerileri:** `docs/06_Improvement_Suggestions.md`
+-   **Kod Yazım Standartları:** `docs/guides/code-style.md`
+-   **Git İş Akışı Kılavuzu:** `docs/guides/git-workflow.md`
+-   **API Dokümantasyonu:** `docs/guides/api-documentation.md`
+-   **İzleme ve Gözlemleme:** `docs/operations/monitoring.md`
+-   **Güvenlik Politikaları:** `docs/operations/security.md`
+-   **Katkı Sağlama Kılavuzu:** `docs/contributing/getting-started.md`
+-   **Pull Request Süreci:** `docs/contributing/pull-request.md`
+-   **Kod İnceleme Süreci:** `docs/contributing/code-review.md`
+-   **Auth Servisi:** `docs/services/auth-service.md`
+-   **Messaging Servisi:** `docs/services/messaging-service.md`
+-   **Voice Servisi:** `docs/services/voice-service.md`
+-   **Server Management Servisi:** `docs/services/server-management-service.md`
+-   **Proje Özeti:** `docs/project_summary.md`
 
-2. Start the development environment:
-   ```bash
-   docker-compose up -d
-   ```
+## Docker ile Çalıştırma
 
-This will start all services:
-- Frontend: http://localhost:8080
-- Backend API: http://localhost:3000
-- PostgreSQL Database: localhost:5432
+### Ön Gereksinimler
 
-### Docker Commands
+-   Docker
+-   Docker Compose
 
-#### Start Services
+### Hızlı Başlangıç
+
+1.  Depoyu klonlayın:
+
+    ```bash
+    git clone https://github.com/inkbytefo/11.git
+    cd 11
+    ```
+
+2.  Geliştirme ortamını başlatın:
+
+    ```bash
+    docker-compose up -d --build
+    ```
+
+    Bu, tüm servisleri başlatacaktır:
+
+    -   Frontend: `http://localhost:8080`
+    -   Backend API: `http://localhost:3000`
+    -   PostgreSQL Veritabanı: `localhost:5432`
+
+### Docker Komutları
+
+#### Servisleri Başlatma
+
 ```bash
-# Start all services
+# Tüm servisleri başlat
 docker-compose up -d
 
-# Start specific service
+# Belirli bir servisi başlat
 docker-compose up -d [service_name]
 ```
 
-#### Stop Services
+#### Servisleri Durdurma
+
 ```bash
-# Stop all services
+# Tüm servisleri durdur
 docker-compose down
 
-# Stop and remove volumes (clean state)
+# Tüm servisleri durdur ve volumeleri kaldır (temiz durum)
 docker-compose down -v
 ```
 
-#### View Logs
+#### Logları Görüntüleme
+
 ```bash
-# View all logs
+# Tüm logları görüntüle
 docker-compose logs -f
 
-# View specific service logs
+# Belirli bir servisin loglarını görüntüle
 docker-compose logs -f [service_name]
 ```
 
-#### Rebuild Services
+#### Servisleri Yeniden Oluşturma
+
 ```bash
-# Rebuild all services
+# Tüm servisleri yeniden oluştur
 docker-compose up -d --build
 
-# Rebuild specific service
+# Belirli bir servisi yeniden oluştur
 docker-compose up -d --build [service_name]
 ```
 
-## Development
+## Geliştirme
 
-### Frontend Development
-- Development server runs on `http://localhost:5173`
-- Backend API runs on `http://localhost:3000`
-- API health check: `http://localhost:3000/api/health`
+### Frontend Geliştirme
 
-### Desktop Application (Tauri)
-To develop the desktop application:
+-   Geliştirme sunucusu `http://localhost:5173` adresinde çalışır.
+-   Backend API `http://localhost:3000` adresinde çalışır.
+-   API health check: `http://localhost:3000/api/health`
 
-1. Install Rust and system dependencies:
-   ```bash
-   # Windows (via Chocolatey)
-   choco install rust-ms visual-studio-2022-buildtools
+### Masaüstü Uygulaması (Tauri)
 
-   # macOS
-   brew install rust
+Masaüstü uygulamasını geliştirmek için:
 
-   # Linux
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-   ```
+1.  Rust ve sistem bağımlılıklarını yükleyin:
 
-2. Navigate to frontend directory:
-   ```bash
-   cd frontend
-   ```
+    ```bash
+    # Windows (via Chocolatey)
+    choco install rust-ms visual-studio-2022-buildtools
 
-3. Install dependencies:
-   ```bash
-   npm install
-   ```
+    # macOS
+    brew install rust
 
-4. Run in development mode:
-   ```bash
-   npm run tauri:dev
-   ```
+    # Linux
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    ```
 
-5. Build desktop application:
-   ```bash
-   npm run tauri:build
-   ```
+2.  Frontend dizinine gidin:
 
-The build output will be available in `frontend/src-tauri/target/release`.
+    ```bash
+    cd frontend
+    ```
+
+3.  Bağımlılıkları yükleyin:
+
+    ```bash
+    npm install
+    ```
+
+4.  Geliştirme modunda çalıştırın:
+
+    ```bash
+    npm run tauri:dev
+    ```
+
+5.  Masaüstü uygulamasını oluşturun:
+
+    ```bash
+    npm run tauri:build
+    ```
+
+    Oluşturulan çıktı `frontend/src-tauri/target/release` dizininde bulunacaktır.
 
 ## CI/CD Pipeline
 
-The project uses GitHub Actions for continuous integration and deployment:
+Proje, sürekli entegrasyon ve dağıtım için GitHub Actions kullanır:
 
-- **Frontend Checks:**
-  - Linting with ESLint
-  - Unit tests with Jest
-  
-- **Backend Checks:**
-  - Linting with ESLint
-  - Unit tests with Jest
-  - Docker image build
+-   **Frontend Kontrolleri:**
+    -   ESLint ile linting
+    -   Jest ile birim testleri
 
-- **Integration:**
-  - Docker Compose build
-  - Health check verification
+-   **Backend Kontrolleri:**
+    -   ESLint ile linting
+    -   Jest ile birim testleri
+    -   Docker image build
 
-The pipeline runs automatically on:
-- Every push to main branch
-- Every pull request to main branch
+-   **Entegrasyon:**
+    -   Docker Compose build
+    -   Health check doğrulaması
 
-## Documentation
+Pipeline, otomatik olarak aşağıdaki olaylarda çalışır:
 
-Refer to the `docs` directory for detailed documentation about:
-- Project Overview
-- Architecture
-- Development Guide
-- Testing Strategy
-- Deployment Guide
-- Improvement Suggestions
+-   `main` branch'ine yapılan her push
+-   `main` branch'ine yapılan her pull request
+
+## Katkı Sağlama
+
+Projemize katkıda bulunmak için lütfen [Katkı Sağlama Kılavuzu](docs/contributing/getting-started.md) ve [Pull Request Süreci](docs/contributing/pull-request.md) dokümanlarını inceleyin.
+
+## Lisans
+
+[MIT Lisansı](LICENSE)
