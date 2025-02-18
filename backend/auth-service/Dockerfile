@@ -17,12 +17,15 @@ RUN apk add --no-cache \
 # Kaynak kodları kopyala
 COPY . .
 
+# TypeScript kodunu derle
+RUN npm run build
+
 # Sağlık kontrolü için healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --quiet --tries=1 --spider http://localhost:3002/health || exit 1
+    CMD wget --quiet --tries=1 --spider http://localhost:3001/health || exit 1
 
 # Auth service portu
-EXPOSE 3002
+EXPOSE 3001
 
 # Uygulamayı başlat
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]
