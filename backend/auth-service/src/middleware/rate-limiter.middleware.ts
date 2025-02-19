@@ -1,13 +1,46 @@
-import { RateLimitError } from '../utils/errors.js';
-import { getRedisConnection } from '../config/redis.js';
-import { config } from '../config/index.js';
+import { Request, Response, NextFunction } from 'express';
+import { RateLimitError } from '../utils/errors';
+import { getRedisConnection } from '../config/redis';
+import { config } from '../config';
 import { promisify } from 'util';
+import { Redis, ChainableCommander } from 'ioredis';
 
 const redis = getRedisConnection();
 const sleep = promisify(setTimeout);
 
+interface RateLimiterOptions {
+  windowMs: number;
+  max: number;
+  keyPrefix?: string;
+  keyGenerator?: (req: RequestWithUser) => string;
+  errorHandler?: (req: RequestWithUser, res: Response, next: NextFunction, error: Error) => void;
+  skipFailedRequests?: boolean;
+  requestTimeout?: number;
+}
+
+interface RateLimitResult {
+  totalHits: number;
+  isRateLimited: boolean;
+  remaining: number;
+  resetTime: number;
+}
+
+interface RequestWithUser extends Request {
+  user?: {
+    id: string;
+  };
+}
+
 class RateLimiter {
-  constructor(options) {
+  private readonly windowMs: number;
+  private readonly max: number;
+  private readonly keyPrefix: string;
+  private keyGenerator?: (req: RequestWithUser) => string;
+  private readonly errorHandler: (req: RequestWithUser, res: Response, next: NextFunction, error: Error) => void;
+  private readonly skipFailedRequests: boolean;
+  private readonly requestTimeout: number;
+
+  constructor(options: RateLimiterOptions) {
     this.windowMs = options.windowMs || 60 * 1000;
     this.max = options.max || 30;
     this.keyPrefix = options.keyPrefix || 'rl:';
@@ -17,7 +50,7 @@ class RateLimiter {
     this.requestTimeout = options.requestTimeout || 5000;
   }
 
-  async handleRateLimit(key, skipIncrement = false) {
+  async handleRateLimit(key: string, skipIncrement = false): Promise<RateLimitResult> {
     const now = Date.now();
     const windowStart = now - this.windowMs;
 
@@ -37,7 +70,7 @@ class RateLimiter {
         throw new Error('Redis işlemi başarısız');
       }
 
-      const totalHits = results[2][1];
+      const totalHits = (results[2][1] as number) || 0;
 
       return {
         totalHits,
@@ -48,19 +81,19 @@ class RateLimiter {
     } catch (error) {
       console.error('Rate limit kontrolü hatası:', error);
       if (this.skipFailedRequests) {
-        return { isRateLimited: false, remaining: this.max };
+        return { totalHits: 0, isRateLimited: false, remaining: this.max, resetTime: 0 };
       }
       throw error;
     }
   }
 
-  defaultErrorHandler(req, res, next, error) {
+  private defaultErrorHandler(req: RequestWithUser, res: Response, next: NextFunction, error: Error): void {
     console.error('Rate limiter hatası:', error);
     next(new RateLimitError());
   }
 
   middleware() {
-    return async (req, res, next) => {
+    return async (req: RequestWithUser, res: Response, next: NextFunction): Promise<void> => {
       if (!this.keyGenerator) {
         this.keyGenerator = (req) => {
           return req.user ? `${this.keyPrefix}user:${req.user.id}` : `${this.keyPrefix}ip:${req.ip}`;
@@ -72,26 +105,26 @@ class RateLimiter {
       try {
         const result = await Promise.race([
           this.handleRateLimit(key),
-          new Promise((_, reject) => 
+          new Promise<never>((_, reject) => 
             setTimeout(() => reject(new Error('Rate limit timeout')), this.requestTimeout)
           )
         ]);
 
         // Response headers'a rate limit bilgisi ekle
         res.set({
-          'X-RateLimit-Limit': this.max,
-          'X-RateLimit-Remaining': result.remaining,
-          'X-RateLimit-Reset': result.resetTime
+          'X-RateLimit-Limit': String(this.max),
+          'X-RateLimit-Remaining': String(result.remaining),
+          'X-RateLimit-Reset': String(result.resetTime)
         });
 
         if (result.isRateLimited) {
-          res.set('Retry-After', Math.ceil(this.windowMs / 1000));
+          res.set('Retry-After', String(Math.ceil(this.windowMs / 1000)));
           throw new RateLimitError();
         }
 
         next();
       } catch (error) {
-        this.errorHandler(req, res, next, error);
+        this.errorHandler(req, res, next, error as Error);
       }
     };
   }
@@ -137,7 +170,11 @@ export const userLimiter = new RateLimiter({
 });
 
 // Rate limit durumunu kontrol et
-export const checkRateLimit = async (key, windowMs, max) => {
+export const checkRateLimit = async (
+  key: string,
+  windowMs: number,
+  max: number
+): Promise<RateLimitResult> => {
   const limiter = new RateLimiter({ windowMs, max });
   return await limiter.handleRateLimit(key, true);
 };

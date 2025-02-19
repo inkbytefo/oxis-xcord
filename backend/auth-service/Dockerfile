@@ -1,31 +1,49 @@
-FROM node:20-alpine
+# Build stage
+FROM node:18-alpine AS builder
 
-WORKDIR /app
+# Çalışma dizinini ayarla
+WORKDIR /usr/src/app
 
 # package.json ve package-lock.json dosyalarını kopyala
-COPY backend/auth-service/package*.json ./
+COPY package*.json ./
 
 # Bağımlılıkları yükle
-RUN npm install
-
-# Güvenlik için bcrypt ve crypto modülleri için gerekli paketleri yükle
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++
+RUN npm ci
 
 # Kaynak kodları kopyala
-COPY backend/auth-service/ .
+COPY . .
 
-# TypeScript kodunu derle
+# TypeScript'i derle
 RUN npm run build
 
-# Sağlık kontrolü için healthcheck
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --quiet --tries=1 --spider http://localhost:3001/health || exit 1
+# Production stage
+FROM node:18-alpine
 
-# Auth service portu
-EXPOSE 3001
+# Çalışma dizinini ayarla
+WORKDIR /usr/src/app
+
+# Package dosyalarını kopyala
+COPY package*.json ./
+
+# Sadece production bağımlılıklarını yükle
+RUN npm ci --only=production
+
+# Builder aşamasından derlenmiş dosyaları kopyala
+COPY --from=builder /usr/src/app/build ./build
+
+# Uygulama için gerekli diğer dosyaları kopyala
+COPY .env.example .env
+
+# Sağlık kontrolü
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget -qO- http://localhost:3000/health || exit 1
+
+# Non-root kullanıcı oluştur ve kullan
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
+# Port'u aç
+EXPOSE 3000
 
 # Uygulamayı başlat
 CMD ["node", "build/index.js"]

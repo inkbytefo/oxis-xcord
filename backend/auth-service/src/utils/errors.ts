@@ -1,27 +1,51 @@
-import { errorCodes, statusCodes } from '../config/index.js';
+import { Request, Response, NextFunction } from 'express';
+import { ValidationError as SequelizeValidationError } from 'sequelize';
+import { errorCodes, statusCodes } from '../config';
+
+interface ErrorResponse {
+  error: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+}
+
+interface ValidationDetail {
+  field: string;
+  message: string;
+}
 
 export class CustomError extends Error {
-  constructor(code, message, statusCode = statusCodes.INTERNAL_SERVER_ERROR, details = null) {
+  readonly code: string;
+  readonly statusCode: number;
+  readonly details: unknown | null;
+
+  constructor(code: string, message: string, statusCode?: number, details: unknown = null) {
     super(message);
     this.code = code;
-    this.statusCode = statusCode;
+    this.statusCode = statusCode || statusCodes.INTERNAL_SERVER_ERROR;
     this.details = details;
     Error.captureStackTrace(this, this.constructor);
   }
 
-  toJSON() {
-    return {
+  toJSON(): ErrorResponse {
+    const response: ErrorResponse = {
       error: {
         code: this.code,
-        message: this.message,
-        ...(this.details && { details: this.details })
+        message: this.message
       }
     };
+
+    if (this.details !== null) {
+      response.error.details = this.details;
+    }
+
+    return response;
   }
 }
 
 export class ValidationError extends CustomError {
-  constructor(details) {
+  constructor(details: ValidationDetail[]) {
     super(
       'VALIDATION_ERROR',
       'Doğrulama hatası',
@@ -32,31 +56,31 @@ export class ValidationError extends CustomError {
 }
 
 export class AuthenticationError extends CustomError {
-  constructor(code = 'AUTH001', message = errorCodes.AUTH001) {
+  constructor(code: string = 'AUTH001', message: string = errorCodes.AUTH001) {
     super(code, message, statusCodes.UNAUTHORIZED);
   }
 }
 
 export class AuthorizationError extends CustomError {
-  constructor(message = 'Bu işlem için yetkiniz yok') {
+  constructor(message: string = 'Bu işlem için yetkiniz yok') {
     super('FORBIDDEN', message, statusCodes.FORBIDDEN);
   }
 }
 
 export class RateLimitError extends CustomError {
-  constructor(message = errorCodes.AUTH005) {
+  constructor(message: string = errorCodes.AUTH005) {
     super('RATE_LIMIT', message, statusCodes.TOO_MANY_REQUESTS);
   }
 }
 
 export class AccountLockedError extends CustomError {
-  constructor(message = errorCodes.AUTH006, details = null) {
+  constructor(message: string = errorCodes.AUTH006, details: unknown = null) {
     super('ACCOUNT_LOCKED', message, statusCodes.UNAUTHORIZED, details);
   }
 }
 
 export class AccountSuspendedError extends CustomError {
-  constructor(reason) {
+  constructor(reason: string) {
     super(
       'ACCOUNT_SUSPENDED',
       errorCodes.AUTH007,
@@ -73,13 +97,13 @@ export class EmailNotVerifiedError extends CustomError {
 }
 
 export class InvalidTokenError extends CustomError {
-  constructor(message = errorCodes.AUTH003) {
+  constructor(message: string = errorCodes.AUTH003) {
     super('INVALID_TOKEN', message, statusCodes.UNAUTHORIZED);
   }
 }
 
 export class TwoFactorRequiredError extends CustomError {
-  constructor(tempToken) {
+  constructor(tempToken: string) {
     super(
       'TWO_FACTOR_REQUIRED',
       '2FA doğrulaması gerekli',
@@ -90,33 +114,50 @@ export class TwoFactorRequiredError extends CustomError {
 }
 
 // Hata yakalama yardımcı fonksiyonları
-export const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
-};
+type AsyncRequestHandler = (req: Request, res: Response, next: NextFunction) => Promise<any>;
 
-export const createErrorResponse = (error) => {
+export const asyncHandler = (fn: AsyncRequestHandler) => 
+  (req: Request, res: Response, next: NextFunction): void => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+
+interface SequelizeError {
+  name: string;
+  errors: Array<{
+    path: string;
+    message: string;
+  }>;
+}
+
+export const createErrorResponse = (error: Error | CustomError | SequelizeError): ErrorResponse => {
   if (error instanceof CustomError) {
     return error.toJSON();
   }
 
   // Sequelize hata dönüşümleri
   if (error.name === 'SequelizeValidationError') {
-    const validationError = new ValidationError(
-      error.errors.map(err => ({
+    const seqError = error as SequelizeError;
+    const validationDetails: ValidationDetail[] = seqError.errors
+      .filter(err => err.path != null)
+      .map(err => ({
         field: err.path,
         message: err.message
-      }))
-    );
+      }));
+
+    const validationError = new ValidationError(validationDetails);
     return validationError.toJSON();
   }
 
   if (error.name === 'SequelizeUniqueConstraintError') {
-    const validationError = new ValidationError(
-      error.errors.map(err => ({
+    const seqError = error as SequelizeError;
+    const validationDetails: ValidationDetail[] = seqError.errors
+      .filter(err => err.path != null)
+      .map(err => ({
         field: err.path,
         message: `${err.path} zaten kullanımda`
-      }))
-    );
+      }));
+
+    const validationError = new ValidationError(validationDetails);
     return validationError.toJSON();
   }
 
@@ -130,8 +171,12 @@ export const createErrorResponse = (error) => {
   return defaultError.toJSON();
 };
 
+interface JWTError extends Error {
+  name: 'JsonWebTokenError' | 'TokenExpiredError' | 'NotBeforeError';
+}
+
 // JWT hata dönüşümleri
-export const handleJWTError = (error) => {
+export const handleJWTError = (error: JWTError | Error): CustomError => {
   if (error.name === 'JsonWebTokenError') {
     return new InvalidTokenError('Geçersiz token formatı');
   }
@@ -141,5 +186,5 @@ export const handleJWTError = (error) => {
   if (error.name === 'NotBeforeError') {
     return new InvalidTokenError('Token henüz geçerli değil');
   }
-  return error;
+  return error as CustomError;
 };

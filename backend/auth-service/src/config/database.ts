@@ -1,9 +1,9 @@
 import { Sequelize } from 'sequelize';
 import { config } from './index.js';
 
-const sequelize = new Sequelize(config.database.url, {
+export const sequelize = new Sequelize(config.database.url, {
   ...config.database.options,
-  logging: (msg) => {
+  logging: (msg: string) => {
     if (config.env === 'development') {
       console.log(msg);
     }
@@ -14,5 +14,3 @@ const sequelize = new Sequelize(config.database.url, {
     paranoid: true
   }
 });
-
-export { sequelize };

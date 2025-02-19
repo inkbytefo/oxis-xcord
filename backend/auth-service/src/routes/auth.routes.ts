@@ -1,24 +1,51 @@
-import { Router } from 'express';
-import { body } from 'express-validator';
-import * as authController from '../controllers/auth.controller.js';
-import { validate } from '../middleware/validator.middleware.js';
+import { Router, Request, Response, NextFunction } from 'express';
+import { body, ValidationChain } from 'express-validator';
+import * as authController from '../controllers/auth.controller';
+import { validate } from '../middleware/validator.middleware';
 import {
   authenticate,
   authorize,
   validateSession,
   require2FA
-} from '../middleware/auth.middleware.js';
+} from '../middleware/auth.middleware';
 import {
   loginLimiter,
   registerLimiter,
   passwordResetLimiter,
   twoFactorLimiter
-} from '../middleware/rate-limiter.middleware.js';
+} from '../middleware/rate-limiter.middleware';
 
 const router = Router();
 
+// Route handler tipleri
+interface TypedRequestBody<T> extends Request {
+  body: T;
+}
+
+interface TypedResponse<T> extends Response {
+  json: (body: T) => this;
+}
+
+// Request body tipleri
+interface RegisterRequest {
+  username: string;
+  email: string;
+  password: string;
+}
+
+interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+interface UpdateProfileRequest {
+  email?: string;
+  currentPassword?: string;
+  newPassword?: string;
+}
+
 // Validasyon şemaları
-const registerSchema = [
+const registerSchema: ValidationChain[] = [
   body('username')
     .trim()
     .isLength({ min: 3, max: 30 })
@@ -37,12 +64,12 @@ const registerSchema = [
     .withMessage('Şifre en az bir büyük harf, bir küçük harf, bir rakam ve bir özel karakter içermelidir')
 ];
 
-const loginSchema = [
+const loginSchema: ValidationChain[] = [
   body('email').trim().isEmail().withMessage('Geçerli bir email adresi giriniz'),
   body('password').notEmpty().withMessage('Şifre gereklidir')
 ];
 
-const updateProfileSchema = [
+const updateProfileSchema: ValidationChain[] = [
   body('email')
     .optional()
     .trim()
@@ -56,12 +83,24 @@ const updateProfileSchema = [
     .optional()
     .isLength({ min: 8 })
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/)
-    .withMessage('Yeni şifre politikaya uygun olmalıdır')
+    .withMessage('Yeni şifre politikaya uygun olmalıdr')
 ];
 
 // Public routes
-router.post('/register', registerLimiter, validate(registerSchema), authController.register);
-router.post('/login', loginLimiter, validate(loginSchema), authController.login);
+router.post<{}, any, RegisterRequest>(
+  '/register',
+  registerLimiter,
+  validate(registerSchema),
+  authController.register
+);
+
+router.post<{}, any, LoginRequest>(
+  '/login',
+  loginLimiter,
+  validate(loginSchema),
+  authController.login
+);
+
 router.post('/refresh-token', authController.refreshToken);
 
 // OAuth routes
@@ -77,7 +116,12 @@ router.post('/logout', validateSession, authController.logout);
 router.post('/logout-all', validateSession, authController.logoutAll);
 
 router.get('/me', authController.getProfile);
-router.put('/profile', validate(updateProfileSchema), authController.updateProfile);
+
+router.put<{}, any, UpdateProfileRequest>(
+  '/profile',
+  validate(updateProfileSchema),
+  authController.updateProfile
+);
 
 // 2FA routes
 router.post('/2fa/enable', twoFactorLimiter, authController.enableTwoFactor);
@@ -91,7 +135,7 @@ router.delete('/oauth/:provider', validateSession, authController.unlinkProvider
 router.get(
   '/users',
   authorize('admin'),
-  async (req, res) => {
+  async (req: Request, res: Response) => {
     // Admin paneli için kullanıcı listesi endpoint'i
     // İleride implement edilecek
     res.status(501).json({ message: 'Not implemented' });
@@ -99,7 +143,12 @@ router.get(
 );
 
 // Health check endpoint'i
-router.get('/health', (req, res) => {
+interface HealthCheckResponse {
+  status: string;
+  timestamp: string;
+}
+
+router.get('/health', (req: Request, res: TypedResponse<HealthCheckResponse>) => {
   res.json({
     status: 'UP',
     timestamp: new Date().toISOString()

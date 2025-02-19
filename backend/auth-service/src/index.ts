@@ -1,21 +1,22 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { Redis } from 'ioredis';
-import { config } from './config/index.js';
-import { sequelize } from './models/User.js';
-import authRoutes from './routes/auth.routes.js';
-import { errorHandler } from './middleware/error.middleware.js';
-import { setupMetrics } from './utils/metrics.js';
-import logger from './utils/logger.js';
+import { Server } from 'http';
+import { config } from './config';
+import { sequelize } from './models/User';
+import authRoutes from './routes/auth.routes';
+import { errorHandler } from './middleware/error.middleware';
+import { setupMetrics, clearMetrics } from './utils/metrics';
+import logger from './utils/logger';
 
 // Express uygulamasını oluştur
 const app = express();
 
 // Redis bağlantısı
 const redis = new Redis(config.redis.url);
-redis.on('error', (err) => {
+redis.on('error', (err: Error) => {
   logger.error('Redis bağlantı hatası:', err);
 });
 redis.on('connect', () => {
@@ -24,7 +25,7 @@ redis.on('connect', () => {
 
 // Temel middleware'ler
 app.use(helmet()); // Güvenlik başlıkları
-app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } })); // Loglama
+app.use(morgan('combined', { stream: { write: (message: string) => logger.info(message.trim()) } })); // Loglama
 app.use(express.json()); // JSON request body parsing
 app.use(express.urlencoded({ extended: true })); // URL-encoded request body parsing
 
@@ -43,7 +44,7 @@ if (config.metrics.enabled) {
 }
 
 // Health check endpoint'i
-app.get('/health', (req, res) => {
+app.get('/health', (req: Request, res: Response) => {
   res.json({
     status: 'UP',
     version: process.env.npm_package_version,
@@ -55,7 +56,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 
 // 404 handler
-app.use((req, res, next) => {
+app.use((req: Request, res: Response) => {
   res.status(404).json({
     error: {
       code: 'NOT_FOUND',
@@ -67,14 +68,18 @@ app.use((req, res, next) => {
 // Error handler
 app.use(errorHandler);
 
+let server: Server;
+
 // Graceful shutdown
-const gracefulShutdown = async (signal) => {
+const gracefulShutdown = async (signal: string) => {
   logger.info(`${signal} alındı. Uygulama kapatılıyor...`);
 
   // HTTP sunucusunu kapat
-  server.close(() => {
-    logger.info('HTTP sunucusu kapatıldı');
-  });
+  if (server) {
+    server.close(() => {
+      logger.info('HTTP sunucusu kapatıldı');
+    });
+  }
 
   // Redis bağlantısını kapat
   await redis.quit();
@@ -101,36 +106,38 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Yakalanmamış hataları logla
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', (error: Error) => {
   logger.error('Yakalanmamış hata:', error);
   gracefulShutdown('uncaughtException');
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason: unknown) => {
   logger.error('İşlenmemiş promise reddi:', reason);
   gracefulShutdown('unhandledRejection');
 });
 
-// Sunucuyu başlat
-const server = app.listen(config.server.port, () => {
-  logger.info(`Auth servisi ${config.server.port} portunda çalışıyor (${config.env} modu)`);
-});
-
-// Veritabanı bağlantısını kontrol et
-import { sequelize } from './models/User.js';
-
-sequelize
-  .authenticate()
-  .then(() => {
+// Veritabanı bağlantısını kontrol et ve sunucuyu başlat
+const startServer = async () => {
+  try {
+    await sequelize.authenticate();
     logger.info('Veritabanı bağlantısı başarılı');
+    
     // Tabloları senkronize et (development modunda)
     if (config.env === 'development') {
-      return sequelize.sync({ alter: true });
+      await sequelize.sync({ alter: true });
     }
-  })
-  .catch((error) => {
+
+    // Sunucuyu başlat
+    server = app.listen(config.server.port, () => {
+      logger.info(`Auth servisi ${config.server.port} portunda çalışıyor (${config.env} modu)`);
+    });
+
+  } catch (error) {
     logger.error('Veritabanı bağlantı hatası:', error);
     process.exit(1);
-  });
+  }
+};
+
+startServer();
 
 export default app;

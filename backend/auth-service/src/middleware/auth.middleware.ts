@@ -1,18 +1,53 @@
+import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { config } from '../config/index.js';
-import { User, Session } from '../models/User.js';
+import { Op } from 'sequelize';
+import { config } from '../config';
+import { User, Session } from '../models/User';
 import {
   AuthenticationError,
   AuthorizationError,
   InvalidTokenError
-} from '../utils/errors.js';
-import { getRedisConnection } from '../config/redis.js';
+} from '../utils/errors';
+import { getRedisConnection } from '../config/redis';
+
+// Tip tanımlamaları
+interface JWTPayload {
+  id: string;
+  username: string;
+  roles: string[];
+  exp?: number;
+}
+
+interface UserAttributes {
+  id: string;
+  username: string;
+  roles: string[];
+  twoFactorEnabled: boolean;
+  verifyTwoFactorToken(token: string): Promise<boolean>;
+}
+
+interface SessionAttributes {
+  id: string;
+  userId: string;
+  isRevoked: boolean;
+  expiresAt: Date;
+}
+
+interface RequestWithUser extends Request {
+  user?: UserAttributes;
+  token?: string;
+  session?: SessionAttributes;
+}
 
 const redis = getRedisConnection();
 const TOKEN_EXPIRY_BUFFER = 5 * 60; // 5 dakika buffer
 
-export const authenticate = async (req, res, next) => {
-  let token;
+export const authenticate = async (
+  req: RequestWithUser,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  let token: string | null;
   try {
     token = extractToken(req);
     if (!token) {
@@ -52,14 +87,14 @@ export const authenticate = async (req, res, next) => {
   }
 };
 
-export const authorize = (...roles) => {
-  return (req, res, next) => {
+export const authorize = (...roles: string[]) => {
+  return (req: RequestWithUser, res: Response, next: NextFunction): void => {
     if (!req.user) {
       return next(new AuthenticationError('Kimlik doğrulama gerekli'));
     }
 
     const hasRequiredRole = roles.some(role => 
-      req.user.roles && req.user.roles.includes(role)
+      req.user?.roles && req.user.roles.includes(role)
     );
 
     if (!hasRequiredRole) {
@@ -70,13 +105,17 @@ export const authorize = (...roles) => {
   };
 };
 
-export const validateSession = async (req, res, next) => {
+export const validateSession = async (
+  req: RequestWithUser,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   if (!req.user) {
     return next(new AuthenticationError('Kimlik doğrulama gerekli'));
   }
 
   try {
-    const sessionId = req.headers['x-session-id'];
+    const sessionId = req.headers['x-session-id'] as string;
     if (!sessionId) {
       throw new AuthenticationError('Oturum ID\'si bulunamadı');
     }
@@ -104,7 +143,11 @@ export const validateSession = async (req, res, next) => {
   }
 };
 
-export const require2FA = async (req, res, next) => {
+export const require2FA = async (
+  req: RequestWithUser,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   if (!req.user) {
     return next(new AuthenticationError('Kimlik doğrulama gerekli'));
   }
@@ -114,7 +157,7 @@ export const require2FA = async (req, res, next) => {
       return next();
     }
 
-    const twoFactorToken = req.headers['x-2fa-token'];
+    const twoFactorToken = req.headers['x-2fa-token'] as string;
     if (!twoFactorToken) {
       throw new AuthenticationError('2FA token gerekli');
     }
@@ -130,9 +173,9 @@ export const require2FA = async (req, res, next) => {
   }
 };
 
-export const blacklistToken = async (token) => {
+export const blacklistToken = async (token: string): Promise<boolean> => {
   try {
-    const decoded = jwt.decode(token);
+    const decoded = jwt.decode(token) as JWTPayload;
     if (!decoded || !decoded.exp) {
       throw new Error('Geçersiz token formatı');
     }
@@ -155,16 +198,16 @@ export const blacklistToken = async (token) => {
 };
 
 // Token doğrulama yardımcı fonksiyonu
-const verifyToken = async (token) => {
+const verifyToken = async (token: string): Promise<JWTPayload> => {
   try {
-    return jwt.verify(token, config.jwt.accessToken.secret);
+    return jwt.verify(token, config.jwt.accessToken.secret) as JWTPayload;
   } catch (error) {
     throw new InvalidTokenError('Token doğrulama hatası');
   }
 };
 
 // 2FA token doğrulama yardımcı fonksiyonu
-const verifyTwoFactorToken = async (user, token) => {
+const verifyTwoFactorToken = async (user: UserAttributes, token: string): Promise<boolean> => {
   try {
     return await user.verifyTwoFactorToken(token);
   } catch (error) {
@@ -174,7 +217,7 @@ const verifyTwoFactorToken = async (user, token) => {
 };
 
 // Token çıkarma yardımcı fonksiyonu
-const extractToken = (req) => {
+const extractToken = (req: Request): string | null => {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     return authHeader.slice(7);

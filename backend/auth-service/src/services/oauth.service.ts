@@ -1,11 +1,53 @@
-import axios from 'axios';
-import { config } from '../config/index.js';
-import { User } from '../models/User.js';
-import { AuthenticationError } from '../utils/errors.js';
+import axios, { AxiosResponse } from 'axios';
+import { config } from '../config';
+import { User } from '../models/User';
+import { AuthenticationError } from '../utils/errors';
+
+// Type declarations
+interface OAuthProfile {
+  id: string;
+  email?: string;
+  name?: string;
+}
+
+interface GoogleUserInfo {
+  sub: string;
+  email: string;
+  name: string;
+  email_verified: boolean;
+}
+
+interface GithubUserInfo {
+  id: number;
+  login: string;
+  name: string | null;
+}
+
+interface GithubEmailInfo {
+  email: string;
+  primary: boolean;
+  verified: boolean;
+}
+
+interface GoogleTokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  refresh_token?: string;
+  scope?: string;
+}
+
+interface GithubTokenResponse {
+  access_token: string;
+  token_type: string;
+  scope: string;
+}
+
+type OAuthProvider = 'google' | 'github';
 
 class OAuthService {
-  async #createOrUpdateUser(profile, provider) {
-    const providerIdField = `${provider}Id`;
+  async #createOrUpdateUser(profile: OAuthProfile, provider: OAuthProvider): Promise<User> {
+    const providerIdField = `${provider}Id` as keyof User;
     const email = profile.email?.toLowerCase();
 
     // Email zorunlu
@@ -44,11 +86,17 @@ class OAuthService {
       email,
       username: this.#generateUsername(profile.name || email),
       [providerIdField]: profile.id,
-      emailVerified: true // OAuth ile gelen emailler doğrulanmış kabul edilir
+      emailVerified: true, // OAuth ile gelen emailler doğrulanmış kabul edilir
+      roles: ['user'],
+      isActive: true,
+      isSuspended: false,
+      loginAttempts: 0,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: []
     });
   }
 
-  #generateUsername(base) {
+  #generateUsername(base: string): string {
     const cleaned = base
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '')
@@ -57,10 +105,10 @@ class OAuthService {
     return `${cleaned}${random}`;
   }
 
-  async handleGoogleAuth(code) {
+  async handleGoogleAuth(code: string): Promise<User> {
     try {
       // Token al
-      const tokenResponse = await axios.post(
+      const tokenResponse: AxiosResponse<GoogleTokenResponse> = await axios.post(
         'https://oauth2.googleapis.com/token',
         {
           code,
@@ -72,7 +120,7 @@ class OAuthService {
       );
 
       // Kullanıcı bilgilerini al
-      const userResponse = await axios.get(
+      const userResponse: AxiosResponse<GoogleUserInfo> = await axios.get(
         'https://www.googleapis.com/oauth2/v3/userinfo',
         {
           headers: {
@@ -81,7 +129,7 @@ class OAuthService {
         }
       );
 
-      const profile = {
+      const profile: OAuthProfile = {
         id: userResponse.data.sub,
         email: userResponse.data.email,
         name: userResponse.data.name
@@ -91,15 +139,15 @@ class OAuthService {
     } catch (error) {
       throw new AuthenticationError(
         'GOOGLE_AUTH_ERROR',
-        'Google ile giriş başarısız: ' + error.message
+        'Google ile giriş başarısız: ' + (error as Error).message
       );
     }
   }
 
-  async handleGithubAuth(code) {
+  async handleGithubAuth(code: string): Promise<User> {
     try {
       // Token al
-      const tokenResponse = await axios.post(
+      const tokenResponse: AxiosResponse<GithubTokenResponse> = await axios.post(
         'https://github.com/login/oauth/access_token',
         {
           code,
@@ -115,22 +163,28 @@ class OAuthService {
       );
 
       // Kullanıcı bilgilerini al
-      const userResponse = await axios.get('https://api.github.com/user', {
-        headers: {
-          Authorization: `Bearer ${tokenResponse.data.access_token}`
+      const userResponse: AxiosResponse<GithubUserInfo> = await axios.get(
+        'https://api.github.com/user',
+        {
+          headers: {
+            Authorization: `Bearer ${tokenResponse.data.access_token}`
+          }
         }
-      });
+      );
 
       // Email bilgisini al
-      const emailsResponse = await axios.get('https://api.github.com/user/emails', {
-        headers: {
-          Authorization: `Bearer ${tokenResponse.data.access_token}`
+      const emailsResponse: AxiosResponse<GithubEmailInfo[]> = await axios.get(
+        'https://api.github.com/user/emails',
+        {
+          headers: {
+            Authorization: `Bearer ${tokenResponse.data.access_token}`
+          }
         }
-      });
+      );
 
       const primaryEmail = emailsResponse.data.find(email => email.primary)?.email;
 
-      const profile = {
+      const profile: OAuthProfile = {
         id: userResponse.data.id.toString(),
         email: primaryEmail,
         name: userResponse.data.login
@@ -140,14 +194,13 @@ class OAuthService {
     } catch (error) {
       throw new AuthenticationError(
         'GITHUB_AUTH_ERROR',
-        'Github ile giriş başarısız: ' + error.message
+        'Github ile giriş başarısız: ' + (error as Error).message
       );
     }
   }
 
-  // OAuth bağlantısını kaldır
-  async unlinkProvider(userId, provider) {
-    const providerIdField = `${provider}Id`;
+  async unlinkProvider(userId: string, provider: OAuthProvider): Promise<User> {
+    const providerIdField = `${provider}Id` as keyof User;
     const user = await User.findByPk(userId);
 
     if (!user) {
@@ -157,7 +210,7 @@ class OAuthService {
     // En az bir giriş yöntemi kalmalı
     const hasPassword = !!user.password;
     const connectedProviders = ['google', 'github'].filter(
-      p => !!user[`${p}Id`] && p !== provider
+      p => !!user[`${p}Id` as keyof User] && p !== provider
     );
 
     if (!hasPassword && connectedProviders.length === 0) {

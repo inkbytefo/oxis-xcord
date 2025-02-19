@@ -63,10 +63,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        BUILD_CONTEXT: ./frontend
-        GIT_EXCLUDE: .git
-        NODE_MODULES_EXCLUDE: node_modules
     <<: *monitoring-config
     ports:
       - "80:80"
@@ -80,10 +76,6 @@ services:
     build:
       context: ./backend/api-gateway
       dockerfile: Dockerfile
-      args:
-        BUILD_CONTEXT: ./backend/api-gateway
-        GIT_EXCLUDE: .git
-        NODE_MODULES_EXCLUDE: node_modules
     <<: *backend-service
     ports:
       - "3000:3000"
@@ -111,10 +103,6 @@ services:
     build:
       context: ./backend/auth-service
       dockerfile: Dockerfile
-      args:
-        BUILD_CONTEXT: ./backend/auth-service
-        GIT_EXCLUDE: .git
-        NODE_MODULES_EXCLUDE: node_modules
     <<: *backend-service
     ports:
       - "3002:3002"
@@ -142,10 +130,6 @@ services:
     build:
       context: ./backend/messaging-service
       dockerfile: Dockerfile
-      args:
-        BUILD_CONTEXT: ./backend/messaging-service
-        GIT_EXCLUDE: .git
-        NODE_MODULES_EXCLUDE: node_modules
     <<: *backend-service
     ports:
       - "3005:3001"
@@ -174,10 +158,6 @@ services:
     build:
       context: ./backend/voice-service
       dockerfile: Dockerfile
-      args:
-        BUILD_CONTEXT: ./backend/voice-service
-        GIT_EXCLUDE: .git
-        NODE_MODULES_EXCLUDE: node_modules
     <<: *backend-service
     ports:
       - "3003:3003"
@@ -202,10 +182,6 @@ services:
     build:
       context: ./backend/server-management-service
       dockerfile: Dockerfile
-      args:
-        BUILD_CONTEXT: ./backend/server-management-service
-        GIT_EXCLUDE: .git
-        NODE_MODULES_EXCLUDE: node_modules
     <<: *backend-service
     ports:
       - "3004:3004"

@@ -1,12 +1,65 @@
-import { validationResult } from 'express-validator';
-import { ValidationError } from '../utils/errors.js';
+import { Request, Response, NextFunction } from 'express';
+import { ValidationChain, validationResult, body, type ValidationError } from 'express-validator';
+import { ValidationError as CustomValidationError } from '../utils/errors';
+
+interface FormattedValidationError {
+  field: string;
+  message: string;
+  value?: any;
+}
+
+// Express-validator ValidationError tipini genişlet
+type ExtendedValidationError = ValidationError & {
+  path: string;
+  value: any;
+};
+
+interface ValidationRule {
+  required?: boolean;
+  trim?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  regex?: RegExp;
+  message?: string;
+  custom?: (value: any) => boolean | Promise<boolean>;
+}
+
+interface ValidationRules {
+  [field: string]: ValidationRule;
+}
+
+interface CommonValidations {
+  password: {
+    minLength: number;
+    maxLength: number;
+    regex: RegExp;
+    message: string;
+  };
+  username: {
+    minLength: number;
+    maxLength: number;
+    regex: RegExp;
+    message: string;
+  };
+  email: {
+    regex: RegExp;
+    message: string;
+  };
+}
+
+const formatValidationErrors = (result: ReturnType<typeof validationResult>): FormattedValidationError[] => {
+  return result.array().map(error => ({
+    field: (error as ExtendedValidationError).path,
+    message: error.msg,
+    value: (error as ExtendedValidationError).value
+  }));
+};
 
 /**
  * Express-validator middleware'i
- * @param {Array} validations Validation zincirleri
  */
-export const validate = (validations) => {
-  return async (req, res, next) => {
+export const validate = (validations: ValidationChain[]) => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     // Tüm validasyonları çalıştır
     await Promise.all(validations.map(validation => validation.run(req)));
 
@@ -16,20 +69,15 @@ export const validate = (validations) => {
     }
 
     // Hataları formatlayıp ValidationError olarak gönder
-    const formattedErrors = errors.array().map(error => ({
-      field: error.path,
-      message: error.msg,
-      value: error.value
-    }));
-
-    next(new ValidationError(formattedErrors));
+    const formattedErrors = formatValidationErrors(errors);
+    next(new CustomValidationError(formattedErrors));
   };
 };
 
 /**
  * Ortak validasyon kuralları
  */
-export const commonValidations = {
+export const commonValidations: CommonValidations = {
   password: {
     minLength: 8,
     maxLength: 100,
@@ -50,9 +98,8 @@ export const commonValidations = {
 
 /**
  * Özel validasyon kuralları oluşturucu
- * @param {Object} rules Validasyon kuralları
  */
-export const createValidator = (rules) => {
+export const createValidator = (rules: ValidationRules): ValidationChain[] => {
   return Object.entries(rules).map(([field, validations]) => {
     const chain = body(field);
 
@@ -90,23 +137,27 @@ export const createValidator = (rules) => {
 /**
  * MongoDB ObjectId validasyonu
  */
-export const isValidObjectId = (value) => {
+export const isValidObjectId = (value: string): boolean => {
   return /^[0-9a-fA-F]{24}$/.test(value);
 };
 
 /**
  * UUID validasyonu
  */
-export const isValidUUID = (value) => {
+export const isValidUUID = (value: string): boolean => {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 };
+
+interface StringObject {
+  [key: string]: any;
+}
 
 /**
  * Sanitizasyon yardımcıları
  */
 export const sanitizers = {
-  trimAll: (obj) => {
-    const sanitized = {};
+  trimAll: (obj: StringObject): StringObject => {
+    const sanitized: StringObject = {};
     for (const [key, value] of Object.entries(obj)) {
       if (typeof value === 'string') {
         sanitized[key] = value.trim();
@@ -117,8 +168,8 @@ export const sanitizers = {
     return sanitized;
   },
 
-  removeEmpty: (obj) => {
-    const cleaned = {};
+  removeEmpty: (obj: StringObject): StringObject => {
+    const cleaned: StringObject = {};
     for (const [key, value] of Object.entries(obj)) {
       if (value !== null && value !== undefined && value !== '') {
         cleaned[key] = value;
@@ -127,7 +178,7 @@ export const sanitizers = {
     return cleaned;
   },
 
-  escapeHTML: (text) => {
+  escapeHTML: (text: string): string => {
     return text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')

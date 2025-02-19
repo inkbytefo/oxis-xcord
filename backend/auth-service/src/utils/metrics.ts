@@ -1,12 +1,28 @@
-import client from 'prom-client';
-import { config } from '../config/index.js';
+import { Request, Response, NextFunction, Application } from 'express';
+import client, { Counter, Gauge, Histogram } from 'prom-client';
+import { config } from '../config';
+
+// Özel tip tanımlamaları
+type Provider = 'email' | 'google' | 'github' | 'discord';
+type Status = 'success' | 'failure';
+
+interface AuthMetrics {
+  loginAttempts: Counter<string>;
+  activeUsers: Gauge<string>;
+  registrations: Counter<string>;
+  tokenRefreshes: Counter<string>;
+  twoFactorAttempts: Counter<string>;
+  requestDuration: Histogram<string>;
+  activeSessions: Gauge<string>;
+  rateLimit: Counter<string>;
+}
 
 // Metrics koleksiyonunu yapılandır
 const collectDefaultMetrics = client.collectDefaultMetrics;
 collectDefaultMetrics({ prefix: config.metrics.prefix });
 
 // Custom metrikler
-const authMetrics = {
+const authMetrics: AuthMetrics = {
   loginAttempts: new client.Counter({
     name: `${config.metrics.prefix}login_attempts_total`,
     help: 'Toplam giriş denemesi sayısı',
@@ -21,7 +37,7 @@ const authMetrics = {
   registrations: new client.Counter({
     name: `${config.metrics.prefix}registrations_total`,
     help: 'Toplam kayıt sayısı',
-    labelNames: ['provider'] // 'email', 'google', 'github', 'discord'
+    labelNames: ['provider']
   }),
 
   tokenRefreshes: new client.Counter({
@@ -55,58 +71,60 @@ const authMetrics = {
 };
 
 // Metrik yardımcı fonksiyonları
-export const metrics = {
-  // Giriş denemelerini kaydet
-  trackLogin: (success) => {
+interface MetricsHelper {
+  trackLogin(success: boolean): void;
+  updateActiveUsers(count: number): void;
+  trackRegistration(provider?: Provider): void;
+  trackTokenRefresh(): void;
+  track2FAAttempt(success: boolean): void;
+  trackRequestDuration(method: string, path: string, statusCode: number, duration: number): void;
+  updateActiveSessions(count: number): void;
+  trackRateLimit(path: string): void;
+}
+
+export const metrics: MetricsHelper = {
+  trackLogin: (success: boolean) => {
     authMetrics.loginAttempts.inc({ status: success ? 'success' : 'failure' });
   },
 
-  // Aktif kullanıcı sayısını güncelle
-  updateActiveUsers: (count) => {
+  updateActiveUsers: (count: number) => {
     authMetrics.activeUsers.set(count);
   },
 
-  // Yeni kayıt işlemini kaydet
-  trackRegistration: (provider = 'email') => {
+  trackRegistration: (provider: Provider = 'email') => {
     authMetrics.registrations.inc({ provider });
   },
 
-  // Token yenileme işlemini kaydet
   trackTokenRefresh: () => {
     authMetrics.tokenRefreshes.inc();
   },
 
-  // 2FA denemesini kaydet
-  track2FAAttempt: (success) => {
+  track2FAAttempt: (success: boolean) => {
     authMetrics.twoFactorAttempts.inc({ status: success ? 'success' : 'failure' });
   },
 
-  // İstek süresini kaydet
-  trackRequestDuration: (method, path, statusCode, duration) => {
+  trackRequestDuration: (method: string, path: string, statusCode: number, duration: number) => {
     authMetrics.requestDuration.observe(
-      { method, path, status_code: statusCode },
+      { method, path, status_code: statusCode.toString() },
       duration
     );
   },
 
-  // Aktif oturum sayısını güncelle
-  updateActiveSessions: (count) => {
+  updateActiveSessions: (count: number) => {
     authMetrics.activeSessions.set(count);
   },
 
-  // Rate limit aşımını kaydet
-  trackRateLimit: (path) => {
+  trackRateLimit: (path: string) => {
     authMetrics.rateLimit.inc({ path });
   }
 };
 
-// Metrics middleware'i
-export const metricsMiddleware = (req, res, next) => {
+// Metrics middleware
+export const metricsMiddleware = (req: Request, res: Response, next: NextFunction): void => {
   const start = Date.now();
 
-  // Response gönderildikten sonra metrikleri kaydet
   res.on('finish', () => {
-    const duration = (Date.now() - start) / 1000; // saniye cinsinden
+    const duration = (Date.now() - start) / 1000;
     metrics.trackRequestDuration(
       req.method,
       req.route?.path || req.path,
@@ -118,8 +136,8 @@ export const metricsMiddleware = (req, res, next) => {
   next();
 };
 
-// Metrics endpoint'i için handler
-export const metricsHandler = async (req, res) => {
+// Metrics endpoint handler
+export const metricsHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     res.set('Content-Type', client.register.contentType);
     res.end(await client.register.metrics());
@@ -129,15 +147,12 @@ export const metricsHandler = async (req, res) => {
 };
 
 // Metrics kurulumu
-export const setupMetrics = (app) => {
-  // Metrics middleware'ini ekle
+export const setupMetrics = (app: Application): void => {
   app.use(metricsMiddleware);
-
-  // Metrics endpoint'ini ekle
   app.get('/metrics', metricsHandler);
 };
 
 // Metrics temizleme
-export const clearMetrics = () => {
+export const clearMetrics = (): void => {
   client.register.clear();
 };
