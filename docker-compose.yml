@@ -1,62 +1,106 @@
+version: '3.9'
+
+x-service-groups:
+  monitoring-config: &monitoring-config
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  backend-service: &backend-service
+    <<: *monitoring-config
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - backend
+      - monitoring
+
 services:
   redis:
-    image: redis:alpine
+    image: redis:7.2.4-alpine
+    <<: *monitoring-config
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - backend
+
+  db:
+    image: postgres:14.9-alpine
+    <<: *monitoring-config
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: xcord_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d xcord_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - backend
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - BUILD_CONTEXT=./frontend
-        - GIT_EXCLUDE=.git
-        - NODE_MODULES_EXCLUDE=node_modules
+        BUILD_CONTEXT: ./frontend
+        GIT_EXCLUDE: .git
+        NODE_MODULES_EXCLUDE: node_modules
+    <<: *monitoring-config
     ports:
       - "80:80"
     depends_on:
-      - api-gateway
+      api-gateway:
+        condition: service_healthy
+    networks:
+      - frontend
 
   api-gateway:
     build:
       context: ./backend/api-gateway
       dockerfile: Dockerfile
       args:
-        - BUILD_CONTEXT=./backend/api-gateway
-        - GIT_EXCLUDE=.git
-        - NODE_MODULES_EXCLUDE=node_modules
+        BUILD_CONTEXT: ./backend/api-gateway
+        GIT_EXCLUDE: .git
+        NODE_MODULES_EXCLUDE: node_modules
+    <<: *backend-service
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=production
-      - JWT_SECRET=${JWT_SECRET}
-      - REDIS_URL=redis://redis:6379
-      - AUTH_SERVICE_URL=http://auth-service:3002
-      - MESSAGING_SERVICE_URL=http://messaging-service:3005
-      - VOICE_SERVICE_URL=http://voice-service:3003
-      - SERVER_MANAGEMENT_URL=http://server-management-service:3004
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:80,https://xcord.example.com}
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis}@redis:6379
+      AUTH_SERVICE_URL: http://auth-service:3002
+      MESSAGING_SERVICE_URL: http://messaging-service:3005
+      VOICE_SERVICE_URL: http://voice-service:3003
+      SERVER_MANAGEMENT_URL: http://server-management-service:3004
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:80,https://xcord.example.com}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-      auth-service:
-        condition: service_started
-      messaging-service:
-        condition: service_started
-      voice-service:
-        condition: service_started
-      server-management-service:
-        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 5s
@@ -68,20 +112,21 @@ services:
       context: ./backend/auth-service
       dockerfile: Dockerfile
       args:
-        - BUILD_CONTEXT=./backend/auth-service
-        - GIT_EXCLUDE=.git
-        - NODE_MODULES_EXCLUDE=node_modules
+        BUILD_CONTEXT: ./backend/auth-service
+        GIT_EXCLUDE: .git
+        NODE_MODULES_EXCLUDE: node_modules
+    <<: *backend-service
     ports:
       - "3002:3002"
     environment:
-      - NODE_ENV=production
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=xcord_db
-      - DB_USER=postgres
-      - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      - JWT_SECRET=${JWT_SECRET}
-      - REDIS_URL=redis://redis:6379
+      NODE_ENV: production
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: xcord_db
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis}@redis:6379
     depends_on:
       db:
         condition: service_healthy
@@ -98,19 +143,20 @@ services:
       context: ./backend/messaging-service
       dockerfile: Dockerfile
       args:
-        - BUILD_CONTEXT=./backend/messaging-service
-        - GIT_EXCLUDE=.git
-        - NODE_MODULES_EXCLUDE=node_modules
+        BUILD_CONTEXT: ./backend/messaging-service
+        GIT_EXCLUDE: .git
+        NODE_MODULES_EXCLUDE: node_modules
+    <<: *backend-service
     ports:
       - "3005:3001"
     environment:
-      - NODE_ENV=production
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=xcord_db
-      - DB_USER=postgres
-      - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      - REDIS_URL=redis://redis:6379
+      NODE_ENV: production
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: xcord_db
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis}@redis:6379
     depends_on:
       db:
         condition: service_healthy
@@ -129,17 +175,18 @@ services:
       context: ./backend/voice-service
       dockerfile: Dockerfile
       args:
-        - BUILD_CONTEXT=./backend/voice-service
-        - GIT_EXCLUDE=.git
-        - NODE_MODULES_EXCLUDE=node_modules
+        BUILD_CONTEXT: ./backend/voice-service
+        GIT_EXCLUDE: .git
+        NODE_MODULES_EXCLUDE: node_modules
+    <<: *backend-service
     ports:
       - "3003:3003"
       - "10000-10100:10000-10100/udp"
     environment:
-      - NODE_ENV=production
-      - MEDIASOUP_LISTEN_IP=0.0.0.0
-      - MEDIASOUP_ANNOUNCED_IP=${MEDIASOUP_ANNOUNCED_IP:-127.0.0.1}
-      - REDIS_URL=redis://redis:6379
+      NODE_ENV: production
+      MEDIASOUP_LISTEN_IP: 0.0.0.0
+      MEDIASOUP_ANNOUNCED_IP: ${MEDIASOUP_ANNOUNCED_IP:-127.0.0.1}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis}@redis:6379
     depends_on:
       redis:
         condition: service_healthy
@@ -156,19 +203,20 @@ services:
       context: ./backend/server-management-service
       dockerfile: Dockerfile
       args:
-        - BUILD_CONTEXT=./backend/server-management-service
-        - GIT_EXCLUDE=.git
-        - NODE_MODULES_EXCLUDE=node_modules
+        BUILD_CONTEXT: ./backend/server-management-service
+        GIT_EXCLUDE: .git
+        NODE_MODULES_EXCLUDE: node_modules
+    <<: *backend-service
     ports:
       - "3004:3004"
     environment:
-      - NODE_ENV=production
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=xcord_db
-      - DB_USER=postgres
-      - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      - REDIS_URL=redis://redis:6379
+      NODE_ENV: production
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: xcord_db
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis}@redis:6379
     depends_on:
       db:
         condition: service_healthy
@@ -180,100 +228,101 @@ services:
       timeout: 5s
       retries: 10
 
-  db:
-    image: postgres:14-alpine
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_DB=xcord_db
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d xcord_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.51.0
+    <<: *monitoring-config
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus:/etc/prometheus
+      - ./prometheus:/etc/prometheus:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - monitoring
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4.1
+    <<: *monitoring-config
     ports:
       - "3001:3000"
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
-      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
     depends_on:
       - prometheus
+    networks:
+      - monitoring
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.1
+    <<: *monitoring-config
     ports:
       - "9200:9200"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health?wait_for_status=green&timeout=10s"]
       interval: 10s
       timeout: 5s
       retries: 10
+    networks:
+      - logging
 
   logstash:
     image: docker.elastic.co/logstash/logstash:8.12.1
+    <<: *monitoring-config
     ports:
       - "5044:5044"
       - "5000:5000/tcp"
       - "5000:5000/udp"
       - "9600:9600"
     volumes:
-      - ./logstash/config:/usr/share/logstash/config
-      - ./logstash/pipeline:/usr/share/logstash/pipeline
+      - ./logstash/config:/usr/share/logstash/config:ro
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
     environment:
-      - "LS_JAVA_OPTS=-Xms256m -Xmx256m"
+      LS_JAVA_OPTS: -Xms256m -Xmx256m
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9600"]
       interval: 10s
       timeout: 5s
       retries: 10
+    networks:
+      - logging
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.12.1
+    <<: *monitoring-config
     ports:
       - "5601:5601"
     volumes:
-      - ./kibana/dashboards:/usr/share/kibana/dashboards
+      - ./kibana/dashboards:/usr/share/kibana/dashboards:ro
     environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5601/api/status"]
       interval: 10s
       timeout: 5s
       retries: 10
+    networks:
+      - logging
 
 volumes:
   postgres_data:
@@ -283,5 +332,11 @@ volumes:
   redis_data:
 
 networks:
-  default:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+  monitoring:
+    driver: bridge
+  logging:
     driver: bridge

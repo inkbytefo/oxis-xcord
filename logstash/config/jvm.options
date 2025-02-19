@@ -1,2 +1,52 @@
+## JVM configuration
+
+# Initial and maximum heap size
 -Xms512m
 -Xmx512m
+
+# Enable G1GC for better pause times
+-XX:+UseG1GC
+-XX:G1ReservePercent=25
+-XX:InitiatingHeapOccupancyPercent=75
+
+# GC logging
+-Xlog:gc*,gc+age=trace,safepoint:file=/var/log/logstash/gc.log:utctime,pid,tags:filecount=7,filesize=100m
+
+# Memory settings
+-XX:MaxGCPauseMillis=50
+-XX:+HeapDumpOnOutOfMemoryError
+-XX:HeapDumpPath=/var/log/logstash/heapdump.hprof
+
+# Performance optimizations
+-XX:+OptimizeStringConcat
+-XX:+UseStringDeduplication
+-Djava.awt.headless=true
+-Dfile.encoding=UTF-8
+
+# Network settings
+-Djava.net.preferIPv4Stack=true
+
+# Locale
+-Duser.language=en
+-Duser.country=US
+
+# Disable JMX
+-XX:+DisableAttachMechanism
+
+# Error handling
+-XX:ErrorFile=/var/log/logstash/hs_err_pid%p.log
+
+# Security options
+-Dlog4j2.formatMsgNoLookups=true
+
+# Memory page size
+-XX:+UseLargePages
+-XX:LargePageSizeInBytes=2m
+
+# CPU optimizations
+-XX:+UseNUMA
+-XX:+UseDynamicNumberOfGCThreads
+
+# String deduplication (reduces memory usage for log processing)
+-XX:+UseStringDeduplication
+-XX:StringDeduplicationAgeThreshold=3

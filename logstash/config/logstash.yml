@@ -1,10 +1,41 @@
+node.name: xcord-logstash
+path.data: /var/lib/logstash
+path.logs: /var/log/logstash
+
+# Network settings
 http.host: "0.0.0.0"
-xpack.monitoring.enabled: false
+http.port: 9600
 
+# Performance settings
+pipeline.workers: ${PIPELINE_WORKERS:2}
+pipeline.batch.size: 150
+pipeline.batch.delay: 50
 pipeline.ordered: auto
-pipeline.workers: 2
 
-queue.type: memory
-queue.max_bytes: 1024mb
+# Queue settings
+queue.type: persisted
+queue.max_bytes: ${QUEUE_MAX_BYTES:1gb}
+queue.checkpoint.writes: 1024
 
-log.level: info
+# Memory settings
+pipeline.unsafe_shutdown: false
+config.reload.automatic: true
+config.reload.interval: 3s
+
+# Monitoring settings
+xpack.monitoring.enabled: false
+monitoring.enabled: true
+
+# Logging settings
+log.level: ${LOG_LEVEL:info}
+log.format: json
+
+# Dead letter queue
+dead_letter_queue.enable: true
+dead_letter_queue.max_bytes: 1gb
+
+# Performance tuning
+path.queue: /var/lib/logstash/queue
+queue.drain: true
+queue.checkpoint.acks: 1024
+queue.page_capacity: 64mb

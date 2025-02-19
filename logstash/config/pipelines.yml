@@ -1,2 +1,10 @@
-- pipeline.id: xcord
-  path.config: "/etc/logstash/pipeline/xcord.conf"
+- pipeline.id: "xcord"
+  path.config: "/usr/share/logstash/pipeline/xcord.conf"
+  pipeline.workers: 4
+  pipeline.batch.size: 250
+  pipeline.batch.delay: 50
+  queue.type: "persisted"
+  queue.max_bytes: 2gb
+  pipeline.ordered: true
+  dead_letter_queue.enable: true
+  config.reload.automatic: true
