@@ -1,143 +1,123 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response, NextFunction, RequestHandler } from 'express';
+import bodyParser from 'body-parser';
 import cors from 'cors';
-import helmet from 'helmet';
-import morgan from 'morgan';
-import { Redis } from 'ioredis';
+import passport from 'passport';
 import { Server } from 'http';
-import { config } from './config';
-import { sequelize } from './models/User';
-import authRoutes from './routes/auth.routes';
-import { errorHandler } from './middleware/error.middleware';
-import { setupMetrics, clearMetrics } from './utils/metrics';
 import logger from './utils/logger';
+import authRoutes from './routes/authRoutes';
+import { authenticate } from './middleware/authenticate';
+import { config } from './config';
+import { AuthRequest } from './types';
 
 // Express uygulamasını oluştur
 const app = express();
 
-// Redis bağlantısı
-const redis = new Redis(config.redis.url);
-redis.on('error', (err: Error) => {
-  logger.error('Redis bağlantı hatası:', err);
-});
-redis.on('connect', () => {
-  logger.info('Redis bağlantısı başarılı');
-});
-
-// Temel middleware'ler
-app.use(helmet()); // Güvenlik başlıkları
-app.use(morgan('combined', { stream: { write: (message: string) => logger.info(message.trim()) } })); // Loglama
-app.use(express.json()); // JSON request body parsing
-app.use(express.urlencoded({ extended: true })); // URL-encoded request body parsing
-
-// CORS yapılandırması
+// Middleware'leri ayarla
+app.use(bodyParser.json());
 app.use(cors({
   origin: config.server.cors.origin,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-ID', 'X-2FA-Token'],
-  exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
+  methods: config.server.cors.methods,
   credentials: true
 }));
 
-// Metrics kurulumu (Prometheus)
-if (config.metrics.enabled) {
-  setupMetrics(app);
-}
+// Passport initialize
+app.use(passport.initialize());
 
-// Health check endpoint'i
-app.get('/health', (req: Request, res: Response) => {
-  res.json({
-    status: 'UP',
-    version: process.env.npm_package_version,
+// Sağlık kontrolü endpoint'i
+const healthCheckHandler: RequestHandler = (_req, res) => {
+  res.status(200).json({
+    status: 'up',
     timestamp: new Date().toISOString()
   });
-});
+};
+app.get('/health', healthCheckHandler);
 
-// Ana route'lar
-app.use('/api/auth', authRoutes);
+// Metrics endpoint'i
+const metricsHandler: RequestHandler = (_req, res) => {
+  res.set('Content-Type', 'text/plain');
+  res.status(200).send(`
+    # HELP auth_login_attempts_total Toplam giriş denemesi sayısı
+    auth_login_attempts_total ${global.loginAttempts || 0}
+    # HELP auth_login_failures_total Başarısız giriş denemesi sayısı
+    auth_login_failures_total ${global.loginFailures || 0}
+    # HELP auth_active_sessions Aktif oturum sayısı
+    auth_active_sessions ${global.activeSessions || 0}
+  `);
+};
+app.get('/metrics', metricsHandler);
 
-// 404 handler
-app.use((req: Request, res: Response) => {
-  res.status(404).json({
-    error: {
-      code: 'NOT_FOUND',
-      message: 'İstenen kaynak bulunamadı'
-    }
+// Auth route'larını ekle
+app.use('/auth', authRoutes);
+
+// Korumalı route örneği
+const protectedHandler: RequestHandler = (_req: Request, res: Response) => {
+  res.json({ message: 'Bu korumalı bir endpoint' });
+};
+app.get('/protected', authenticate as RequestHandler, protectedHandler);
+
+// Hata yakalama middleware'i
+const errorHandler = (err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  logger.error('Uygulama hatası:', err);
+  res.status(500).json({
+    error: true,
+    message: 'Sunucu hatası'
   });
-});
-
-// Error handler
+};
 app.use(errorHandler);
 
-let server: Server;
-
-// Graceful shutdown
-const gracefulShutdown = async (signal: string) => {
-  logger.info(`${signal} alındı. Uygulama kapatılıyor...`);
-
-  // HTTP sunucusunu kapat
-  if (server) {
-    server.close(() => {
-      logger.info('HTTP sunucusu kapatıldı');
-    });
-  }
-
-  // Redis bağlantısını kapat
-  await redis.quit();
-  logger.info('Redis bağlantısı kapatıldı');
-
-  // Veritabanı bağlantısını kapat
-  try {
-    await sequelize.close();
-    logger.info('Veritabanı bağlantısı kapatıldı');
-  } catch (error) {
-    logger.error('Veritabanı bağlantısı kapatılırken hata:', error);
-  }
-
-  // Prometheus metrikleri temizleme
-  if (config.metrics.enabled) {
-    clearMetrics();
-  }
-
-  process.exit(0);
+// Bulunamayan route'lar için 404
+const notFoundHandler: RequestHandler = (_req, res) => {
+  res.status(404).json({
+    error: true,
+    message: 'Endpoint bulunamadı'
+  });
 };
+app.use(notFoundHandler);
 
-// Shutdown sinyallerini dinle
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-// Yakalanmamış hataları logla
-process.on('uncaughtException', (error: Error) => {
-  logger.error('Yakalanmamış hata:', error);
-  gracefulShutdown('uncaughtException');
-});
-
-process.on('unhandledRejection', (reason: unknown) => {
-  logger.error('İşlenmemiş promise reddi:', reason);
-  gracefulShutdown('unhandledRejection');
-});
-
-// Veritabanı bağlantısını kontrol et ve sunucuyu başlat
-const startServer = async () => {
-  try {
-    await sequelize.authenticate();
-    logger.info('Veritabanı bağlantısı başarılı');
-    
-    // Tabloları senkronize et (development modunda)
-    if (config.env === 'development') {
-      await sequelize.sync({ alter: true });
-    }
-
-    // Sunucuyu başlat
-    server = app.listen(config.server.port, () => {
-      logger.info(`Auth servisi ${config.server.port} portunda çalışıyor (${config.env} modu)`);
-    });
-
-  } catch (error) {
-    logger.error('Veritabanı bağlantı hatası:', error);
+// PostgreSQL bağlantısını kontrol et
+import { getPool } from './config/database';
+const pool = getPool();
+pool.query('SELECT NOW()', (err) => {
+  if (err) {
+    logger.error('PostgreSQL bağlantı hatası:', err);
     process.exit(1);
   }
+  logger.info('PostgreSQL bağlantısı başarılı');
+});
+
+// Redis bağlantısını kontrol et
+import redis from './config/redis';
+redis.ping((err) => {
+  if (err) {
+    logger.error('Redis bağlantı hatası:', err);
+    process.exit(1);
+  }
+  logger.info('Redis bağlantısı başarılı');
+});
+
+// Sunucuyu başlat
+const PORT = config.server.port;
+const server: Server = app.listen(PORT, () => {
+  logger.info(`Auth Service ${PORT} portunda çalışıyor`);
+  logger.info(`Ortam: ${process.env.NODE_ENV}`);
+});
+
+// Graceful shutdown
+const shutdown = () => {
+  logger.info('SIGTERM sinyali alındı. Sunucu kapatılıyor...');
+  
+  // Açık bağlantıları kapat
+  pool.end();
+  redis.quit();
+  
+  // Sunucuyu kapat
+  server.close(() => {
+    logger.info('Sunucu kapatıldı');
+    process.exit(0);
+  });
 };
 
-startServer();
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 
 export default app;

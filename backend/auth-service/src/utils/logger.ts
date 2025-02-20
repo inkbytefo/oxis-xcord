@@ -1,37 +1,23 @@
-import winston, { Logger, format } from 'winston';
+import winston from 'winston';
 
-// Log seviyesi tipi
-type LogLevel = 'error' | 'warn' | 'info' | 'http' | 'verbose' | 'debug' | 'silly';
-
-// Log formatı için yapılandırma
-interface LogFormat {
-  level: string;
-  message: string;
-  timestamp: string;
-  [key: string]: unknown;
-}
-
-const logger: Logger = winston.createLogger({
-  level: (process.env.LOG_LEVEL as LogLevel) || 'info',
-  format: format.combine(
-    format.timestamp(),
-    format.json()
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
   ),
+  defaultMeta: { service: 'auth-service' },
   transports: [
-    new winston.transports.Console({
-      format: format.combine(
-        format.colorize(),
-        format.simple()
-      )
-    })
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
   ]
 });
 
-// Morgan için stream
-export const loggerStream = {
-  write: (message: string) => {
-    logger.info(message.trim());
-  }
-};
+// Geliştirme ortamında konsola log bas
+if (process.env.NODE_ENV !== 'production') {
+  logger.add(new winston.transports.Console({
+    format: winston.format.simple()
+  }));
+}
 
 export default logger;

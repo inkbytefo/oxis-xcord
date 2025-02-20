@@ -1,59 +1,29 @@
 {
   "compilerOptions": {
-    // ECMAScript hedefi ve modül sistemi
-    "target": "es2020",
+    "target": "ES6",
     "module": "commonjs",
-    "lib": ["es2020"],
-    "moduleResolution": "node",
-
-    // Çıktı yapılandırması
-    "outDir": "build",
-    "rootDir": "src",
-    "baseUrl": "src",
-    "sourceMap": true,
-
-    // Tip kontrolleri
+    "lib": ["ES6"],
+    "outDir": "./build",
+    "rootDir": "./src",
     "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
-    "strictBindCallApply": true,
-    "strictPropertyInitialization": false,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-
-    // Modül çözümleme
-    "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "resolveJsonModule": true,
-
-    // Dekoratör desteği
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-
-    // Path aliases
-    "paths": {
-      "@/*": ["./*"],
-      "@config/*": ["config/*"],
-      "@models/*": ["models/*"],
-      "@services/*": ["services/*"],
-      "@middleware/*": ["middleware/*"],
-      "@utils/*": ["utils/*"]
-    },
-
-    // Diğer seçenekler
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "removeComments": false,
-    "declaration": true,
-    "declarationMap": true
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "*": ["node_modules/*"]
+    },
+    "typeRoots": [
+      "./node_modules/@types",
+      "./src/types"
+    ],
+    "types": ["node", "express"]
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "src/types/global.d.ts"
   ],
   "exclude": [
     "node_modules",
