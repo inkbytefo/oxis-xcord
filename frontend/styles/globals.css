@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-size: 16px;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: "Inter", sans-serif;
+  }
+}

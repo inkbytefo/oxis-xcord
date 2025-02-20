@@ -1,5 +1,23 @@
 import { useState, FormEvent } from 'react';
-import './LoginForm.css';
+import styles from './LoginForm.module.css';
+import axios from 'axios';
+
+const authService = {
+  async login(email: string, password: string): Promise<LoginResponse> {
+    try {
+      const response = await axios.post<LoginResponse>('http://localhost:3001/api/v1/auth/login', {
+        email,
+        password
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error?.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error('Network error occurred');
+    }
+  }
+};
 
 interface LoginFormProps {
   onLogin: (token: string) => void;
@@ -48,22 +66,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
 
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:3000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data: LoginResponse = await response.json();
-
-      if (!response.ok) {
-        const errorMessage = data.message || data.error || 'Giriş başarısız';
-        throw new Error(errorMessage);
-      }
-
+      const data = await authService.login(email, password);
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       onLogin(data.token);
@@ -75,12 +78,12 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
   };
 
   return (
-    <div className="login-form-container">
-      <form onSubmit={handleSubmit} className="login-form">
+    <div className={styles['login-form-container']}>
+      <form onSubmit={handleSubmit} className={styles['login-form']}>
         <h2>Giriş Yap</h2>
-        {error && <div className="error-message">{error}</div>}
+        {error && <div className={styles['error-message']}>{error}</div>}
         
-        <div className="form-group">
+        <div className={styles['form-group']}>
           <label htmlFor="email">E-posta</label>
           <input
             type="email"
@@ -89,10 +92,11 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="E-posta adresiniz"
             disabled={loading}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
-        <div className="form-group">
+        <div className={styles['form-group']}>
           <label htmlFor="password">Şifre</label>
           <input
             type="password"
@@ -101,10 +105,15 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Şifreniz"
             disabled={loading}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
-        <button type="submit" disabled={loading}>
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full py-2 px-4 bg-blue-500 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75 disabled:bg-gray-400 disabled:cursor-not-allowed"
+        >
           {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
         </button>
       </form>
