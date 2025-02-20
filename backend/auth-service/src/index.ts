@@ -3,18 +3,19 @@ import bodyParser from 'body-parser';
 import cors from 'cors';
 import passport from 'passport';
 import { Server } from 'http';
-import logger from './utils/logger';
-import authRoutes from './routes/authRoutes';
-import { authenticate } from './middleware/authenticate';
-import { config } from './config';
-import { AuthRequest } from './types';
-import { testConnection as testDBConnection } from './config/database';
-import redis from './config/redis';
+import { Redis } from 'ioredis';
+import { logger } from './utils/logger.js';
+import { authRoutes } from './routes/authRoutes.js';
+import { authenticate } from './middleware/authenticate.js';
+import { config } from './config/index.js';
+import { AuthRequest } from './types/index.js';
+import { testConnection as testDBConnection } from './config/database.js';
+import { redis } from './config/redis.js';
 
-// Express uygulamasını oluştur
+// Create Express application
 const app = express();
 
-// Middleware'leri ayarla
+// Configure middleware
 app.use(bodyParser.json());
 app.use(cors({
   origin: config.server.cors.origin,
@@ -22,10 +23,10 @@ app.use(cors({
   credentials: true
 }));
 
-// Passport initialize
+// Initialize Passport
 app.use(passport.initialize());
 
-// Sağlık kontrolü endpoint'i
+// Health check endpoint
 const healthCheckHandler: RequestHandler = (_req, res) => {
   res.status(200).json({
     status: 'up',
@@ -34,79 +35,79 @@ const healthCheckHandler: RequestHandler = (_req, res) => {
 };
 app.get('/health', healthCheckHandler);
 
-// Metrics endpoint'i
+// Metrics endpoint
 const metricsHandler: RequestHandler = (_req, res) => {
   res.set('Content-Type', 'text/plain');
   res.status(200).send(`
-    # HELP auth_login_attempts_total Toplam giriş denemesi sayısı
+    # HELP auth_login_attempts_total Total login attempts
     auth_login_attempts_total ${global.loginAttempts || 0}
-    # HELP auth_login_failures_total Başarısız giriş denemesi sayısı
+    # HELP auth_login_failures_total Failed login attempts
     auth_login_failures_total ${global.loginFailures || 0}
-    # HELP auth_active_sessions Aktif oturum sayısı
+    # HELP auth_active_sessions Active sessions
     auth_active_sessions ${global.activeSessions || 0}
   `);
 };
 app.get('/metrics', metricsHandler);
 
-// Auth route'larını ekle
+// Add auth routes
 app.use('/auth', authRoutes);
 
-// Korumalı route örneği
+// Protected route example
 const protectedHandler: RequestHandler = (_req: Request, res: Response) => {
-  res.json({ message: 'Bu korumalı bir endpoint' });
+  res.json({ message: 'This is a protected endpoint' });
 };
 app.get('/protected', authenticate as RequestHandler, protectedHandler);
 
-// Hata yakalama middleware'i
+// Error handling middleware
 const errorHandler = (err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  logger.error('Uygulama hatası:', err);
+  logger.error('Application error:', err);
   res.status(500).json({
     error: true,
-    message: 'Sunucu hatası'
+    message: 'Server error'
   });
 };
 app.use(errorHandler);
 
-// Bulunamayan route'lar için 404
+// 404 handler for unknown routes
 const notFoundHandler: RequestHandler = (_req, res) => {
   res.status(404).json({
     error: true,
-    message: 'Endpoint bulunamadı'
+    message: 'Endpoint not found'
   });
 };
 app.use(notFoundHandler);
 
-// Bağlantıları kontrol et ve sunucuyu başlat
+// Check connections and start server
 const startServer = async () => {
   try {
-    // PostgreSQL bağlantısını kontrol et
+    // Check PostgreSQL connection
     await testDBConnection();
 
-    // Redis bağlantısını kontrol et
+    // Check Redis connection
     await new Promise<void>((resolve, reject) => {
-      redis.ping((err) => {
+      redis.ping((err: Error | null) => {
         if (err) {
-          logger.error('Redis bağlantı hatası:', err);
+          logger.error('Redis connection error:', err);
           reject(err);
         } else {
-          logger.info('Redis bağlantısı başarılı');
+          logger.info('Redis connection successful');
           resolve();
         }
       });
     });
 
-    // Sunucuyu başlat
+    // Start server
     const PORT = config.server.port;
     const server: Server = app.listen(PORT, () => {
-      logger.info(`Auth Service ${PORT} portunda çalışıyor`);
-      logger.info(`Ortam: ${process.env.NODE_ENV}`);
+      logger.info(`Auth Service running on port ${PORT}`);
+      logger.info(`Environment: ${process.env.NODE_ENV}`);
     });
 
     // Graceful shutdown
     const shutdown = () => {
-      logger.info('SIGTERM sinyali alındı. Sunucu kapatılıyor...');
+      logger.info('SIGTERM signal received. Shutting down server...');
       server.close(() => {
-        logger.info('Sunucu kapatıldı');
+        logger.info('Server shut down');
         process.exit(0);
       });
     };
@@ -115,12 +116,12 @@ const startServer = async () => {
     process.on('SIGINT', shutdown);
 
   } catch (error) {
-    logger.error('Sunucu başlatılamadı:', error);
+    logger.error('Server failed to start:', error);
     process.exit(1);
   }
 };
 
-// Sunucuyu başlat
+// Start server
 startServer();
 
-export default app;
+export { app };

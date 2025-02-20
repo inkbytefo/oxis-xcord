@@ -1,0 +1,179 @@
+# XCord Platform Kuralları ve Yönergeleri
+
+## 1. Kod Yapısı ve Organizasyon
+
+### 1.1 Dizin Yapısı
+```
+backend/
+├── api-gateway/        # API Gateway servisi
+├── auth-service/       # Kimlik doğrulama servisi
+├── messaging-service/  # Mesajlaşma servisi
+├── voice-service/      # Ses servisi
+└── server-management/ # Sunucu yönetim servisi
+```
+
+### 1.2 Her Servis için Standart Yapı
+```
+service/
+├── src/
+│   ├── config/        # Konfigürasyon dosyaları
+│   ├── controllers/   # İş mantığı kontrolcüleri
+│   ├── middleware/    # Ara katman yazılımları
+│   ├── routes/        # Rota tanımlamaları
+│   ├── utils/         # Yardımcı fonksiyonlar
+│   ├── types/         # TypeScript tip tanımları
+│   └── index.ts       # Ana uygulama dosyası
+├── tests/             # Test dosyaları
+└── docs/              # Servis dökümantasyonu
+```
+
+## 2. Kod Yazım Kuralları
+
+### 2.1 Genel
+- TypeScript kullanılacak
+- Strict mode aktif olacak
+- ESLint ve Prettier kullanılacak
+- Her dosya UTF-8 kodlaması kullanacak
+- Satır sonu karakteri LF olacak
+
+### 2.2 İsimlendirme
+- Dosya isimleri: kebab-case (`user-service.ts`)
+- Sınıf isimleri: PascalCase (`UserService`)
+- Fonksiyon/değişken: camelCase (`getUserById`)
+- Sabitler: UPPER_SNAKE_CASE (`MAX_RETRY_COUNT`)
+- Interface/Type: PascalCase (`UserInterface`)
+- Bileşen dosyaları: PascalCase (`UserProfile.tsx`)
+
+### 2.3 Kod Formatı
+- Girinti: 2 boşluk
+- Max satır uzunluğu: 100 karakter
+- String tanımlama: tek tırnak (')
+- Noktalı virgül kullanımı zorunlu
+- Her dosya sonunda boş satır
+
+## 3. API Tasarım Kuralları
+
+### 3.1 REST Endpoint Yapısı
+- Çoğul isimler kullan (`/users` not `/user`)
+- Nested resource için alt çizgi (`/users/1/posts`)
+- Versiyon belirt (`/api/v1/users`)
+- HTTP metodlarını doğru kullan
+
+### 3.2 Request/Response
+- Tüm response'lar JSON formatında
+- Status kodları doğru kullanılmalı
+- Error response'lar standart formatta
+- Rate limiting header'ları ekle
+- Pagination için cursor kullan
+
+## 4. Güvenlik Kuralları
+
+### 4.1 Kimlik Doğrulama
+- JWT kullan
+- Token'ları Redis'te sakla
+- Refresh token rotasyonu uygula
+- SSL/TLS zorunlu
+- Rate limiting uygula
+
+### 4.2 Veri Güvenliği
+- Hassas veriyi şifrele
+- PII verilerini maskeleme
+- Input validation zorunlu
+- SQL injection önleme
+- XSS koruması
+
+## 5. Test Kuralları
+
+### 5.1 Test Kapsamı
+- Birim testleri zorunlu
+- Integration testleri gerekli
+- E2E testler CI/CD'de
+- Test coverage min %80
+- Snapshot testleri frontend için
+
+### 5.2 Test Yazım
+- Test dosyaları .test.ts uzantılı
+- Describe/it formatı kullan
+- Mock data fixtures kullan
+- Her test bağımsız olmalı
+- Test DB'si ayrı olmalı
+
+## 6. Dokümantasyon
+
+### 6.1 Kod Dokümantasyonu
+- JSDoc formatı kullan
+- Karmaşık fonksiyonları açıkla
+- API endpoint'leri dökümante et
+- Type/interface tanımlarını açıkla
+- Örnek kullanımlar ekle
+
+### 6.2 Proje Dokümantasyonu
+- README güncel tutulmalı
+- API dökümantasyonu OpenAPI/Swagger
+- Kurulum adımları detaylı olmalı
+- Environment değişkenleri açıklanmalı
+- Troubleshooting guide ekle
+
+## 7. Monitoring ve Logging
+
+### 7.1 Logging
+- Winston logger kullan
+- Log seviyeleri doğru kullan
+- Request ID ekle
+- Hassas veriyi maskele
+- Structured logging format
+
+### 7.2 Monitoring
+- Health check endpoint'leri
+- Prometheus metrics
+- Error tracking (Sentry)
+- Performance monitoring
+- Resource kullanım takibi
+
+## 8. Deployment ve CI/CD
+
+### 8.1 Container
+- Dockerfile optimize et
+- Multi-stage build kullan
+- .dockerignore kullan
+- Non-root user kullan
+- Security scanning yap
+
+### 8.2 CI/CD Pipeline
+- Her PR için test
+- Lint kontrolü
+- Security scanning
+- Automated deployment
+- Version tagging
+
+## 9. Geliştirme Süreci
+
+### 9.1 Version Control
+- Feature branch workflow
+- Semantic versioning
+- Commit message formatı
+- PR template kullan
+- Branch naming convention
+
+### 9.2 Code Review
+- PR boyutu max 400 satır
+- 2 onay gerekli
+- CI kontrolleri geçmeli
+- Review checklist kullan
+- Yapıcı feedback ver
+
+## 10. Performans
+
+### 10.1 Backend
+- Connection pooling
+- Caching stratejisi
+- Query optimizasyonu
+- Async/await kullan
+- N+1 problemi önle
+
+### 10.2 Frontend
+- Code splitting
+- Lazy loading
+- Asset optimizasyonu
+- Bundle size kontrolü
+- Memory leak önleme

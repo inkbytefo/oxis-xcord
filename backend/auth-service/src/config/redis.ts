@@ -1,14 +1,15 @@
 import Redis from 'ioredis';
+import { logger } from '../utils/logger.js';
 
-const redis = new Redis(process.env.REDIS_URL);
+const redis = new Redis(process.env.REDIS_URL || 'redis://redis:6379');
 
-// Redis bağlantı durumunu kontrol et
+// Check Redis connection status
 redis.on('connect', () => {
-  console.info('Redis bağlantısı başarılı');
+  logger.info('Redis connection successful');
 });
 
-redis.on('error', (error) => {
-  console.error('Redis bağlantı hatası:', error);
+redis.on('error', (error: Error) => {
+  logger.error('Redis connection error:', error);
 });
 
-export default redis;
+export { redis };

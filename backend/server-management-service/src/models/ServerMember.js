@@ -1,5 +1,5 @@
 import { DataTypes, Model } from 'sequelize';
-import sequelize from '../config/database.js';
+import { sequelize } from '../config/database.js';
 
 class ServerMember extends Model {}
 
@@ -33,16 +33,16 @@ ServerMember.init({
   sequelize,
   modelName: 'ServerMember',
   timestamps: true,
-    indexes: [
+  indexes: [
     {
       unique: true,
       fields: ['serverId', 'userId']
     },
-    // Performans için eklenen index
+    // Performance index
     {
       fields: ['userId', 'serverId']
     }
   ]
 });
 
-export { ServerMember, sequelize };
+export { ServerMember };

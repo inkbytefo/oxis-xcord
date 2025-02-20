@@ -1,24 +1,24 @@
 import { Router } from 'express';
-import * as authController from '../controllers/authController';
-import * as oauthController from '../controllers/oauthController';
-import createRateLimiter from '../middleware/rateLimiter';
-import validate from '../middleware/validate';
-import { ValidationRules } from '../types';
+import * as authController from '../controllers/authController.js';
+import * as oauthController from '../controllers/oauthController.js';
+import createRateLimiter from '../middleware/rateLimiter.js';
+import validate from '../middleware/validate.js';
+import { ValidationRules } from '../types/index.js';
 
 const router = Router();
 
-// Rate limiting kuralları
+// Rate limiting rules
 const loginLimiter = createRateLimiter({
-  windowMs: 60 * 1000, // 1 dakika
-  max: 5 // 5 istek
+  windowMs: 60 * 1000, // 1 minute
+  max: 5 // 5 requests
 });
 
 const registerLimiter = createRateLimiter({
-  windowMs: 60 * 1000, // 1 dakika
-  max: 3 // 3 istek
+  windowMs: 60 * 1000, // 1 minute
+  max: 3 // 3 requests
 });
 
-// Validasyon kuralları
+// Validation rules
 const registerValidation: ValidationRules = {
   username: {
     exists: true,
@@ -58,4 +58,4 @@ router.get('/google/callback', oauthController.googleCallback);
 router.get('/github', oauthController.githubAuth);
 router.get('/github/callback', oauthController.githubCallback);
 
-export default router;
+export { router as authRoutes };

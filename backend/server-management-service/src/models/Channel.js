@@ -1,6 +1,6 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/database');
-const Server = require('./Server');
+import { DataTypes } from 'sequelize';
+import { sequelize } from '../config/database.js';
+import { Server } from './Server.js';
 
 const Channel = sequelize.define('Channel', {
   channel_id: {
@@ -48,5 +48,4 @@ const Channel = sequelize.define('Channel', {
 
 Channel.belongsTo(Server, { foreignKey: 'server_id' });
 
-module.exports.Channel = Channel;
-
+export { Channel };
