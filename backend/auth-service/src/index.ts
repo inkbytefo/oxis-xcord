@@ -8,6 +8,8 @@ import authRoutes from './routes/authRoutes';
 import { authenticate } from './middleware/authenticate';
 import { config } from './config';
 import { AuthRequest } from './types';
+import { testConnection as testDBConnection } from './config/database';
+import redis from './config/redis';
 
 // Express uygulamasını oluştur
 const app = express();
@@ -74,50 +76,51 @@ const notFoundHandler: RequestHandler = (_req, res) => {
 };
 app.use(notFoundHandler);
 
-// PostgreSQL bağlantısını kontrol et
-import { getPool } from './config/database';
-const pool = getPool();
-pool.query('SELECT NOW()', (err) => {
-  if (err) {
-    logger.error('PostgreSQL bağlantı hatası:', err);
+// Bağlantıları kontrol et ve sunucuyu başlat
+const startServer = async () => {
+  try {
+    // PostgreSQL bağlantısını kontrol et
+    await testDBConnection();
+
+    // Redis bağlantısını kontrol et
+    await new Promise<void>((resolve, reject) => {
+      redis.ping((err) => {
+        if (err) {
+          logger.error('Redis bağlantı hatası:', err);
+          reject(err);
+        } else {
+          logger.info('Redis bağlantısı başarılı');
+          resolve();
+        }
+      });
+    });
+
+    // Sunucuyu başlat
+    const PORT = config.server.port;
+    const server: Server = app.listen(PORT, () => {
+      logger.info(`Auth Service ${PORT} portunda çalışıyor`);
+      logger.info(`Ortam: ${process.env.NODE_ENV}`);
+    });
+
+    // Graceful shutdown
+    const shutdown = () => {
+      logger.info('SIGTERM sinyali alındı. Sunucu kapatılıyor...');
+      server.close(() => {
+        logger.info('Sunucu kapatıldı');
+        process.exit(0);
+      });
+    };
+
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
+
+  } catch (error) {
+    logger.error('Sunucu başlatılamadı:', error);
     process.exit(1);
   }
-  logger.info('PostgreSQL bağlantısı başarılı');
-});
-
-// Redis bağlantısını kontrol et
-import redis from './config/redis';
-redis.ping((err) => {
-  if (err) {
-    logger.error('Redis bağlantı hatası:', err);
-    process.exit(1);
-  }
-  logger.info('Redis bağlantısı başarılı');
-});
-
-// Sunucuyu başlat
-const PORT = config.server.port;
-const server: Server = app.listen(PORT, () => {
-  logger.info(`Auth Service ${PORT} portunda çalışıyor`);
-  logger.info(`Ortam: ${process.env.NODE_ENV}`);
-});
-
-// Graceful shutdown
-const shutdown = () => {
-  logger.info('SIGTERM sinyali alındı. Sunucu kapatılıyor...');
-  
-  // Açık bağlantıları kapat
-  pool.end();
-  redis.quit();
-  
-  // Sunucuyu kapat
-  server.close(() => {
-    logger.info('Sunucu kapatıldı');
-    process.exit(0);
-  });
 };
 
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+// Sunucuyu başlat
+startServer();
 
 export default app;
