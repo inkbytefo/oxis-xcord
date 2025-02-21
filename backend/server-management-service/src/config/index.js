@@ -2,7 +2,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 export const config = {
-  port: process.env.PORT || 3004,
+  port: process.env.PORT || 8004,
   corsOrigin: process.env.CORS_ORIGIN || '*',
   environment: process.env.NODE_ENV || 'development',
   rateLimit: {

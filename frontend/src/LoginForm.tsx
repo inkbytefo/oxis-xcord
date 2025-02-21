@@ -1,14 +1,13 @@
 import { useState, FormEvent } from 'react';
-import styles from './LoginForm.module.css';
 import axios from 'axios';
 
 const authService = {
   async login(email: string, password: string): Promise<LoginResponse> {
     try {
-      const response = await axios.post<LoginResponse>('http://localhost:3001/api/v1/auth/login', {
-        email,
-        password
-      });
+      const response = await axios.post<LoginResponse>(
+        'http://localhost:3001/api/v1/auth/login',
+        { email, password }
+      );
       return response.data;
     } catch (error: any) {
       if (error?.response?.data?.message) {
@@ -77,14 +76,36 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     }
   };
 
+  const inputClasses = [
+    'w-full px-3 py-2',
+    'border border-gray-300 rounded-md',
+    'focus:outline-none focus:ring-2',
+    'focus:ring-blue-500',
+    'disabled:bg-gray-100'
+  ].join(' ');
+
+  const submitButtonClasses = [
+    'w-full py-2 px-4',
+    'bg-blue-500 text-white font-semibold rounded-lg shadow-md',
+    'hover:bg-blue-700 focus:outline-none',
+    'focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75',
+    'disabled:bg-gray-400 disabled:cursor-not-allowed'
+  ].join(' ');
+
   return (
-    <div className={styles['login-form-container']}>
-      <form onSubmit={handleSubmit} className={styles['login-form']}>
-        <h2>Giriş Yap</h2>
-        {error && <div className={styles['error-message']}>{error}</div>}
+    <div className="w-full max-w-md mx-auto">
+      <form onSubmit={handleSubmit} className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+        <h2 className="text-2xl font-bold mb-6 text-center">Giriş Yap</h2>
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {error}
+          </div>
+        )}
         
-        <div className={styles['form-group']}>
-          <label htmlFor="email">E-posta</label>
+        <div className="mb-4">
+          <label htmlFor="email" className="block text-gray-700 text-sm font-bold mb-2">
+            E-posta
+          </label>
           <input
             type="email"
             id="email"
@@ -92,12 +113,14 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="E-posta adresiniz"
             disabled={loading}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={inputClasses}
           />
         </div>
 
-        <div className={styles['form-group']}>
-          <label htmlFor="password">Şifre</label>
+        <div className="mb-6">
+          <label htmlFor="password" className="block text-gray-700 text-sm font-bold mb-2">
+            Şifre
+          </label>
           <input
             type="password"
             id="password"
@@ -105,14 +128,14 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Şifreniz"
             disabled={loading}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={inputClasses}
           />
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-2 px-4 bg-blue-500 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          className={submitButtonClasses}
         >
           {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
         </button>

@@ -1,5 +1,5 @@
 const config = {
-  port: process.env.PORT || 3003,
+  port: process.env.PORT || 8003,
   jwtSecret: process.env.JWT_SECRET,
   mediasoup: {
     worker: {

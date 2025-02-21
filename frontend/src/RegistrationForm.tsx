@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import styles from './RegistrationForm.module.css';
 import axios from 'axios';
 
 const authService = {
-  async register(username: string, email: string, password: string): Promise<RegistrationResponse> {
+  async register(
+    username: string,
+    email: string,
+    password: string
+  ): Promise<RegistrationResponse> {
     try {
-      const response = await axios.post<RegistrationResponse>('http://localhost:3001/api/v1/auth/register', {
-        username,
-        email,
-        password
-      });
+      const response = await axios.post<RegistrationResponse>(
+        'http://localhost:3001/api/v1/auth/register',
+        { username, email, password }
+      );
       return response.data;
     } catch (error: any) {
       if (error?.response?.data?.message) {
@@ -41,6 +43,28 @@ interface RegistrationFormProps {
   onSuccess?: () => void;
 }
 
+// Password validation pattern broken into parts for readability
+const passwordPattern = {
+  lowerCase: '(?=.*[a-z])',
+  upperCase: '(?=.*[A-Z])',
+  digit: '(?=.*\\d)',
+  special: '(?=.*[@$!%*?&])',
+  length: '[A-Za-z\\d@$!%*?&]{8,}',
+};
+
+const passwordRegex = new RegExp(
+  `^${passwordPattern.lowerCase}${passwordPattern.upperCase}` +
+  `${passwordPattern.digit}${passwordPattern.special}${passwordPattern.length}$`
+);
+
+const passwordRequirements = [
+  'En az 8 karakter uzunluğunda olmalı',
+  'En az bir büyük harf içermeli',
+  'En az bir küçük harf içermeli',
+  'En az bir rakam içermeli',
+  'En az bir özel karakter içermeli'
+].join(', ');
+
 export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess }) => {
   const [formData, setFormData] = useState<FormData>({
     username: '',
@@ -65,11 +89,10 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess })
       newErrors.email = 'Geçerli bir e-posta adresi giriniz';
     }
 
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     if (!formData.password) {
       newErrors.password = 'Şifre gerekli';
     } else if (!passwordRegex.test(formData.password)) {
-      newErrors.password = 'Şifre en az 8 karakter uzunluğunda olmalı ve en az bir büyük harf, bir küçük harf, bir rakam ve bir özel karakter içermelidir';
+      newErrors.password = `Şifre: ${passwordRequirements}`;
     }
 
     setErrors(newErrors);
@@ -108,7 +131,6 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess })
           onSuccess();
         }
       }, 2000);
-
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Bir hata oluştu');
     } finally {
@@ -116,13 +138,31 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess })
     }
   };
 
+  const inputClasses = [
+    'w-full px-3 py-2',
+    'border border-gray-300 rounded-md',
+    'focus:outline-none focus:ring-2',
+    'focus:ring-blue-500',
+    'disabled:bg-gray-100'
+  ].join(' ');
+
+  const labelClasses = 'block text-gray-700 text-sm font-bold mb-2';
+
+  const submitButtonClasses = [
+    'w-full py-2 px-4',
+    'bg-blue-500 text-white font-semibold rounded-lg shadow-md',
+    'hover:bg-blue-700 focus:outline-none',
+    'focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75',
+    'disabled:bg-gray-400 disabled:cursor-not-allowed'
+  ].join(' ');
+
   return (
-    <div className={styles['registration-form-container']}>
-      <form onSubmit={handleSubmit} className={styles['registration-form']}>
-        <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Kayıt Ol</h2>
+    <div className="w-full max-w-md mx-auto">
+      <form onSubmit={handleSubmit} className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+        <h2 className="text-2xl font-bold mb-6 text-center">Kayıt Ol</h2>
 
         <div className="mb-4">
-          <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="username" className={labelClasses}>
             Kullanıcı Adı
           </label>
           <input
@@ -132,13 +172,15 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess })
             value={formData.username}
             onChange={handleChange}
             disabled={loading}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            className={inputClasses}
           />
-          {errors.username && <span className="text-red-600 text-sm mt-1">{errors.username}</span>}
+          {errors.username && (
+            <span className="text-red-600 text-sm mt-1">{errors.username}</span>
+          )}
         </div>
 
         <div className="mb-4">
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="email" className={labelClasses}>
             E-posta
           </label>
           <input
@@ -148,13 +190,15 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess })
             value={formData.email}
             onChange={handleChange}
             disabled={loading}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            className={inputClasses}
           />
-          {errors.email && <span className="text-red-600 text-sm mt-1">{errors.email}</span>}
+          {errors.email && (
+            <span className="text-red-600 text-sm mt-1">{errors.email}</span>
+          )}
         </div>
 
         <div className="mb-6">
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="password" className={labelClasses}>
             Şifre
           </label>
           <input
@@ -164,9 +208,11 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess })
             value={formData.password}
             onChange={handleChange}
             disabled={loading}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            className={inputClasses}
           />
-          {errors.password && <span className="text-red-600 text-sm mt-1">{errors.password}</span>}
+          {errors.password && (
+            <span className="text-red-600 text-sm mt-1">{errors.password}</span>
+          )}
         </div>
 
         {message && (
@@ -184,7 +230,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess })
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-2 px-4 bg-blue-500 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          className={submitButtonClasses}
         >
           {loading ? 'Kaydediliyor...' : 'Kayıt Ol'}
         </button>

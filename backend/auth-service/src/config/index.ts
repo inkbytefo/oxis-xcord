@@ -1,12 +1,12 @@
 import * as database from './database';
-import redis from './redis';
+import { redis } from './redis';
 import * as jwt from './jwt';
 import { Config } from '../types';
 
 // Yapılandırma nesnesi
 const config: Config = {
   server: {
-    port: parseInt(process.env.PORT || '3001', 10),
+    port: parseInt(process.env.PORT || '8001', 10),
     cors: {
       origin: (process.env.CORS_ORIGIN || 'https://xcord.app').split(','),
       methods: ['GET', 'POST', 'PUT', 'DELETE']

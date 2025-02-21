@@ -1,8 +1,8 @@
 import rateLimit, { Options } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { Request, Response, RequestHandler } from 'express';
-import redis from '../config/redis';
-import logger from '../utils/logger';
+import { redis } from '../config/redis';
+import { logger } from '../utils/logger';
 
 interface RateLimitOptions {
   windowMs?: number;

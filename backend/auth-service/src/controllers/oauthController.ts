@@ -5,7 +5,7 @@ import { Strategy as GitHubStrategy } from 'passport-github2';
 import { User, OAuthProfile } from '../types';
 import { generateAccessToken, generateRefreshToken } from '../config/jwt';
 import * as db from '../config/database';
-import logger from '../utils/logger';
+import { logger } from '../utils/logger';
 
 // OAuth stratejilerini koşullu olarak yükle
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {

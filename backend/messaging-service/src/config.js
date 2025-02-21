@@ -1,5 +1,5 @@
 const config = {
-  port: process.env.PORT || 3002,
+  port: process.env.PORT || 8002,
   corsOrigin: process.env.CORS_ORIGIN || '*',
   mongodb: {
     uri: process.env.MONGODB_URI || 'mongodb://mongodb:27017/messaging'

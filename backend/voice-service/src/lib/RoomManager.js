@@ -1,7 +1,7 @@
 import mediasoup from 'mediasoup';
 import { config } from '../config.js';
 import { Room } from './Room.js';
-import { logger } from '../utils/logger.js';
+import logger from '../utils/logger.js';
 
 export class RoomManager {
   constructor() {

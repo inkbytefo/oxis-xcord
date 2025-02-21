@@ -1,18 +1,18 @@
 export const config = {
-  port: process.env.PORT || 3000,
+  port: process.env.PORT || 8000,
   jwtSecret: process.env.JWT_SECRET || 'default-secret',
   services: {
     auth: {
-      url: process.env.AUTH_SERVICE_URL || 'http://localhost:3002',
+      url: process.env.AUTH_SERVICE_URL || 'http://localhost:8001',
     },
     messaging: {
-      url: process.env.MESSAGING_SERVICE_URL || 'http://localhost:3001',
+      url: process.env.MESSAGING_SERVICE_URL || 'http://localhost:8002',
     },
     voice: {
-      url: process.env.VOICE_SERVICE_URL || 'http://localhost:3003',
+      url: process.env.VOICE_SERVICE_URL || 'http://localhost:8003',
     },
     serverManagement: {
-      url: process.env.SERVER_MANAGEMENT_SERVICE_URL || 'http://localhost:3004',
+      url: process.env.SERVER_MANAGEMENT_URL || 'http://localhost:8004',
     },
   },
   redis: {

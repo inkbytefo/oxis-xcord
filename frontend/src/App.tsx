@@ -33,6 +33,20 @@ function App() {
     setShowLogin(true);
   };
 
+  const logoutButtonClasses = [
+    'px-4 py-2',
+    'bg-red-500 text-white rounded-md',
+    'hover:bg-red-600 focus:outline-none',
+    'focus:ring-2 focus:ring-red-500 focus:ring-opacity-50',
+    'transition-colors'
+  ].join(' ');
+
+  const linkButtonClasses = [
+    'text-blue-500 underline',
+    'hover:text-blue-700',
+    'focus:outline-none'
+  ].join(' ');
+
   if (isAuthenticated) {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     return (
@@ -46,7 +60,7 @@ function App() {
             <InteractiveElement>
               <button
                 onClick={handleLogout}
-                className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 transition-colors"
+                className={logoutButtonClasses}
               >
                 Çıkış Yap
               </button>
@@ -71,7 +85,7 @@ function App() {
                 Hesabınız yok mu?{' '}
                 <button
                   onClick={() => setShowLogin(false)}
-                  className="text-blue-500 underline hover:text-blue-700 focus:outline-none"
+                  className={linkButtonClasses}
                 >
                   Kayıt Ol
                 </button>
@@ -86,7 +100,7 @@ function App() {
                 Zaten hesabınız var mı?{' '}
                 <button
                   onClick={() => setShowLogin(true)}
-                  className="text-blue-500 underline hover:text-blue-700 focus:outline-none"
+                  className={linkButtonClasses}
                 >
                   Giriş Yap
                 </button>

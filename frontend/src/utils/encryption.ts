@@ -12,7 +12,10 @@ async function generateIV(): Promise<Uint8Array> {
 // String'den ArrayBuffer'a dönüştürme
 function str2ab(str: string): ArrayBuffer {
   const encoder = new TextEncoder();
-  return encoder.encode(str);
+  const uint8Array = encoder.encode(str);
+  const arrayBuffer = new ArrayBuffer(uint8Array.byteLength);
+  new Uint8Array(arrayBuffer).set(uint8Array);
+  return arrayBuffer;
 }
 
 // ArrayBuffer'dan string'e dönüştürme

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ValidationRules } from '../types';
-import logger from '../utils/logger';
+import { logger } from '../utils/logger';
 
 const validate = (validations: ValidationRules) => {
   return async (req: Request, res: Response, next: NextFunction) => {

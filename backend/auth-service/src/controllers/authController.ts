@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import { User, ServiceError } from '../types';
 import * as db from '../config/database';
-import logger from '../utils/logger';
+import { logger } from '../utils/logger';
 import { generateAccessToken, generateRefreshToken } from '../config/jwt';
 
 export const register = async (req: Request, res: Response) => {

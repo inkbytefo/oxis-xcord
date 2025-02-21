@@ -1,4 +1,4 @@
-import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig, AxiosResponse, AxiosHeaders } from 'axios';
 import { encrypt, decrypt } from './encryption';
 import { logger } from './logger';
 
@@ -6,13 +6,6 @@ interface TokenData {
   token: string;
   refreshToken: string;
   expiresAt: number;
-}
-
-interface AuthError extends Error {
-  response?: {
-    status: number;
-    data: any;
-  };
 }
 
 class AuthManager {
@@ -43,12 +36,17 @@ class AuthManager {
   }
 
   private async getStoredTokenData(): Promise<TokenData | null> {
+    if (this.tokenData) {
+      return this.tokenData;
+    }
+
     try {
       const encryptedData = sessionStorage.getItem('auth_data');
       if (!encryptedData) return null;
 
       const decryptedData = await decrypt(encryptedData);
-      return JSON.parse(decryptedData) as TokenData;
+      this.tokenData = JSON.parse(decryptedData) as TokenData;
+      return this.tokenData;
     } catch (error) {
       logger.error('Token okuma hatası:', error as Error);
       return null;
@@ -99,18 +97,18 @@ class AuthManager {
 
   setupAxiosInterceptors(): void {
     axios.interceptors.request.use(
-      async (config: AxiosRequestConfig) => {
+      async (config: InternalAxiosRequestConfig) => {
         try {
           const storedData = await this.getStoredTokenData();
           if (!storedData) return config;
 
           if (storedData.expiresAt - Date.now() < 5 * 60 * 1000) {
             const newToken = await this.refreshAuthToken();
-            config.headers = config.headers || {};
-            config.headers.Authorization = `Bearer ${newToken}`;
+            config.headers = config.headers instanceof AxiosHeaders ? config.headers : new AxiosHeaders();
+            config.headers.set('Authorization', `Bearer ${newToken}`);
           } else {
-            config.headers = config.headers || {};
-            config.headers.Authorization = `Bearer ${storedData.token}`;
+            config.headers = config.headers instanceof AxiosHeaders ? config.headers : new AxiosHeaders();
+            config.headers.set('Authorization', `Bearer ${storedData.token}`);
           }
         } catch (error) {
           logger.error('Request interceptor hatası:', error as Error);
@@ -123,15 +121,16 @@ class AuthManager {
     axios.interceptors.response.use(
       (response: AxiosResponse) => response,
       async (error: AxiosError) => {
-        const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
+        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
         
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
           
           try {
             const newToken = await this.refreshAuthToken();
-            originalRequest.headers = originalRequest.headers || {};
-            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            originalRequest.headers = originalRequest.headers instanceof AxiosHeaders ? 
+              originalRequest.headers : new AxiosHeaders();
+            originalRequest.headers.set('Authorization', `Bearer ${newToken}`);
             return axios(originalRequest);
           } catch (refreshError) {
             logger.error('Token yenileme başarısız:', refreshError as Error);

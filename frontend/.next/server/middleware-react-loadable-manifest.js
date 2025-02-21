@@ -1,1 +1,1 @@
-self.__REACT_LOADABLE_MANIFEST="{}"
+self.__REACT_LOADABLE_MANIFEST='{"pages\\\\index.tsx -> ../src/InteractiveElement":{"id":6990,"files":["static/chunks/990.34fa11cb76ec45a0.js"]},"pages\\\\index.tsx -> ../src/LoginForm":{"id":116,"files":["static/chunks/66.a2ac7fa19c0de403.js","static/chunks/116.b2e6c9122ac68dee.js"]},"pages\\\\index.tsx -> ../src/RegistrationForm":{"id":3199,"files":["static/chunks/66.a2ac7fa19c0de403.js","static/chunks/199.0b2e428b0539bbf1.js"]},"pages\\\\index.tsx -> ../src/ThemeSettings":{"id":1778,"files":["static/chunks/778.0ecfa88fce168570.js"]}}';
