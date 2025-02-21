@@ -1,29 +1,36 @@
-"use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getPool = exports.query = void 0;
-const pg_1 = require("pg");
-const pool = new pg_1.Pool({
+import { Pool } from 'pg';
+import { logger } from '../utils/logger';
+const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
-const query = (text, params) => __awaiter(void 0, void 0, void 0, function* () {
+// Bağlantıyı test et ve yeniden dene
+const testConnection = async (retries = 5, delay = 5000) => {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const client = await pool.connect();
+            client.release();
+            logger.info('PostgreSQL bağlantısı başarılı');
+            return;
+        }
+        catch (error) {
+            if (i === retries - 1) {
+                logger.error('PostgreSQL bağlantı hatası:', error);
+                throw error;
+            }
+            logger.warn(`PostgreSQL bağlantısı başarısız, ${delay / 1000} saniye sonra tekrar denenecek`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+};
+export const query = async (text, params) => {
     try {
-        return yield pool.query(text, params);
+        return await pool.query(text, params);
     }
     catch (error) {
-        console.error('Database query error:', error);
+        logger.error('Database query error:', error);
         throw error;
     }
-});
-exports.query = query;
-const getPool = () => pool;
-exports.getPool = getPool;
+};
+export const getPool = () => pool;
+export { testConnection };

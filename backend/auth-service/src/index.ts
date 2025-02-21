@@ -4,13 +4,14 @@ import cors from 'cors';
 import passport from 'passport';
 import { Server } from 'http';
 import { Redis } from 'ioredis';
-import { logger } from './utils/logger.js';
-import { authRoutes } from './routes/authRoutes.js';
-import { authenticate } from './middleware/authenticate.js';
-import { config } from './config/index.js';
-import { AuthRequest } from './types/index.js';
-import { testConnection as testDBConnection } from './config/database.js';
-import { redis } from './config/redis.js';
+
+import { logger } from './utils/logger';
+import { authRoutes } from './routes/authRoutes';
+import { authenticate } from './middleware/authenticate';
+import { config } from './config';
+import { AuthRequest } from './types';
+import { testConnection as testDBConnection } from './config/database';
+import { redis } from './config/redis';
 
 // Create Express application
 const app = express();
@@ -84,17 +85,13 @@ const startServer = async () => {
     await testDBConnection();
 
     // Check Redis connection
-    await new Promise<void>((resolve, reject) => {
-      redis.ping((err: Error | null) => {
-        if (err) {
-          logger.error('Redis connection error:', err);
-          reject(err);
-        } else {
-          logger.info('Redis connection successful');
-          resolve();
-        }
-      });
-    });
+    try {
+      await redis.ping();
+      logger.info('Redis connection successful');
+    } catch (err) {
+      logger.error('Redis connection error:', err);
+      throw err;
+    }
 
     // Start server
     const PORT = config.server.port;

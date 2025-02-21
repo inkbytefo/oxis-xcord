@@ -1,47 +1,19 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
-const authController = __importStar(require("../controllers/authController"));
-const oauthController = __importStar(require("../controllers/oauthController"));
-const rateLimiter_1 = __importDefault(require("../middleware/rateLimiter"));
-const validate_1 = __importDefault(require("../middleware/validate"));
-const router = (0, express_1.Router)();
-// Rate limiting kuralları
-const loginLimiter = (0, rateLimiter_1.default)({
+import { Router } from 'express';
+import * as authController from '../controllers/authController.js';
+import * as oauthController from '../controllers/oauthController.js';
+import createRateLimiter from '../middleware/rateLimiter.js';
+import validate from '../middleware/validate.js';
+const router = Router();
+// Rate limiting rules
+const loginLimiter = createRateLimiter({
     windowMs: 60 * 1000,
-    max: 5 // 5 istek
+    max: 5 // 5 requests
 });
-const registerLimiter = (0, rateLimiter_1.default)({
+const registerLimiter = createRateLimiter({
     windowMs: 60 * 1000,
-    max: 3 // 3 istek
+    max: 3 // 3 requests
 });
-// Validasyon kuralları
+// Validation rules
 const registerValidation = {
     username: {
         exists: true,
@@ -68,8 +40,8 @@ const loginValidation = {
     }
 };
 // Auth routes
-router.post('/register', registerLimiter, (0, validate_1.default)(registerValidation), authController.register);
-router.post('/login', loginLimiter, (0, validate_1.default)(loginValidation), authController.login);
+router.post('/register', registerLimiter, validate(registerValidation), authController.register);
+router.post('/login', loginLimiter, validate(loginValidation), authController.login);
 router.post('/refresh', authController.refreshToken);
 router.post('/logout', authController.logout);
 // OAuth routes
@@ -77,4 +49,4 @@ router.get('/google', oauthController.googleAuth);
 router.get('/google/callback', oauthController.googleCallback);
 router.get('/github', oauthController.githubAuth);
 router.get('/github/callback', oauthController.githubCallback);
-exports.default = router;
+export { router as authRoutes };

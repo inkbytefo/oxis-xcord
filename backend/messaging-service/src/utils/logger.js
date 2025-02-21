@@ -1,6 +1,6 @@
 import winston from 'winston';
 
-const logger = winston.createLogger({
+export const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(
     winston.format.timestamp(),
@@ -40,5 +40,3 @@ export const loggerMiddleware = (req, res, next) => {
   logger.info(`${req.method} ${req.url}`);
   next();
 };
-
-export default logger;

@@ -17,6 +17,27 @@ Server Management Service, XCord platformundaki sunucuların, kanalların ve üy
 
 ## Teknik Detaylar
 
+### Veritabanı Konfigürasyonu
+
+Servis, PostgreSQL veritabanını kullanmaktadır. Bağlantı yönetimi için connection pool kullanılır ve bağlantı hataları durumunda otomatik yeniden deneme mekanizması bulunmaktadır.
+
+```typescript
+// Veritabanı bağlantı ayarları
+const dbConfig = {
+  user: process.env.POSTGRES_USER || 'postgres',
+  password: process.env.POSTGRES_PASSWORD || 'postgres',
+  host: process.env.POSTGRES_HOST || 'localhost',
+  port: parseInt(process.env.POSTGRES_PORT || '5432'),
+  database: process.env.POSTGRES_DB || 'server_management',
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+};
+
+// Bağlantı yeniden deneme stratejisi
+- Maksimum deneme sayısı: 5
+- Denemeler arası bekleme süresi: 5 saniye
+- Hata durumunda loglama ve izleme
+```
+
 ### Veritabanı Şeması
 
 ```sql

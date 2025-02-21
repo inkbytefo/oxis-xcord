@@ -1,15 +1,11 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const ioredis_1 = __importDefault(require("ioredis"));
-const redis = new ioredis_1.default(process.env.REDIS_URL);
-// Redis bağlantı durumunu kontrol et
+import Redis from 'ioredis';
+import { logger } from '../utils/logger.js';
+const redis = new Redis(process.env.REDIS_URL || 'redis://redis:6379');
+// Check Redis connection status
 redis.on('connect', () => {
-    console.info('Redis bağlantısı başarılı');
+    logger.info('Redis connection successful');
 });
 redis.on('error', (error) => {
-    console.error('Redis bağlantı hatası:', error);
+    logger.error('Redis connection error:', error);
 });
-exports.default = redis;
+export { redis };

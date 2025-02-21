@@ -1,84 +1,76 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.authorize = exports.authenticate = void 0;
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const logger_1 = __importDefault(require("../utils/logger"));
-const authenticate = (req, res, next) => {
+import jwt from 'jsonwebtoken';
+import { logger } from '../utils/logger.js';
+export const authenticate = (req, res, next) => {
     try {
-        // Authorization header'ını kontrol et
+        // Check Authorization header
         const authHeader = req.headers.authorization;
         if (!authHeader) {
             return res.status(401).json({
                 error: true,
-                message: 'Yetkilendirme başlığı eksik'
+                message: 'Authorization header missing'
             });
         }
-        // Bearer token'ı ayıkla
+        // Extract Bearer token
         const token = authHeader.split(' ')[1];
         if (!token) {
             return res.status(401).json({
                 error: true,
-                message: 'Token bulunamadı'
+                message: 'Token not found'
             });
         }
-        // Token'ı doğrula
-        const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_ACCESS_SECRET);
-        // Kullanıcı bilgisini request nesnesine ekle
+        // Verify token
+        const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+        // Add user info to request object
         req.user = decoded;
         next();
     }
     catch (error) {
-        if (error instanceof jsonwebtoken_1.default.TokenExpiredError) {
-            logger_1.default.warn('Süresi dolmuş token kullanım denemesi');
+        if (error instanceof jwt.TokenExpiredError) {
+            logger.warn('Expired token access attempt');
             return res.status(401).json({
                 error: true,
-                message: 'Token süresi dolmuş'
+                message: 'Token expired'
             });
         }
-        if (error instanceof jsonwebtoken_1.default.JsonWebTokenError) {
-            logger_1.default.warn('Geçersiz token kullanım denemesi');
+        if (error instanceof jwt.JsonWebTokenError) {
+            logger.warn('Invalid token access attempt');
             return res.status(401).json({
                 error: true,
-                message: 'Geçersiz token'
+                message: 'Invalid token'
             });
         }
-        logger_1.default.error('Kimlik doğrulama hatası:', error);
+        logger.error('Authentication error:', error);
         res.status(500).json({
             error: true,
-            message: 'Kimlik doğrulama işlemi sırasında bir hata oluştu'
+            message: 'An error occurred during authentication'
         });
     }
 };
-exports.authenticate = authenticate;
-// Belirli rollere sahip kullanıcıları kontrol et
-const authorize = (roles = []) => {
+// Check for specific user roles
+export const authorize = (roles = []) => {
     return (req, res, next) => {
         try {
             if (!req.user) {
                 return res.status(401).json({
                     error: true,
-                    message: 'Yetkilendirme gerekli'
+                    message: 'Authorization required'
                 });
             }
             if (roles.length && !roles.includes(req.user.role || '')) {
-                logger_1.default.warn(`Yetkisiz erişim denemesi - Kullanıcı: ${req.user.id}, İstenen rol: ${roles.join(', ')}`);
+                logger.warn(`Unauthorized access attempt - User: ${req.user.id}, Required roles: ${roles.join(', ')}`);
                 return res.status(403).json({
                     error: true,
-                    message: 'Bu işlem için yetkiniz yok'
+                    message: 'You do not have permission for this action'
                 });
             }
             next();
         }
         catch (error) {
-            logger_1.default.error('Yetkilendirme hatası:', error);
+            logger.error('Authorization error:', error);
             res.status(500).json({
                 error: true,
-                message: 'Yetkilendirme işlemi sırasında bir hata oluştu'
+                message: 'An error occurred during authorization'
             });
         }
     };
 };
-exports.authorize = authorize;

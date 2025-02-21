@@ -51,34 +51,35 @@ class TCPTransport extends Transport {
   }
 }
 
-// Log formatını yapılandır
-const logFormat = winston.format.combine(
-  winston.format.timestamp(),
-  winston.format.errors({ stack: true }),
-  winston.format.json()
-);
+// Create the base logger instance
+const createBaseLogger = () => {
+  const logFormat = winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  );
 
-// Logger'ı oluştur
-const logger = winston.createLogger({
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-  format: logFormat,
-  defaultMeta: { service: 'voice-service' },
-  transports: [
-    // Konsol transport'u
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      )
-    }),
-    // TCP transport'u (Logstash'e gönderim)
-    new TCPTransport({
-      host: 'logstash',
-      port: 5000,
-      level: 'info'
-    })
-  ]
-});
+  return winston.createLogger({
+    level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+    format: logFormat,
+    defaultMeta: { service: 'voice-service' },
+    transports: [
+      new winston.transports.Console({
+        format: winston.format.combine(
+          winston.format.colorize(),
+          winston.format.simple()
+        )
+      }),
+      new TCPTransport({
+        host: 'logstash',
+        port: 5000,
+        level: 'info'
+      })
+    ]
+  });
+};
+
+const logger = createBaseLogger();
 
 // HTTP istekleri için middleware
 export const loggerMiddleware = (req, res, next) => {

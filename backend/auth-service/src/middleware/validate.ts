@@ -5,53 +5,58 @@ import { logger } from '../utils/logger';
 const validate = (validations: ValidationRules) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // Validasyon kurallarını uygula
+      // Apply validation rules
       for (const field in validations) {
         const rules = validations[field];
         const value = req.body[field];
 
-        // Alan var mı kontrol et
+        // Check if field exists
         if (rules.exists && !value) {
           return res.status(400).json({
             error: true,
-            message: `${field} alanı gerekli`,
+            message: `${field} is required`,
             field
           });
         }
 
-        // Uzunluk kontrolü
+        // Skip further validations if value is not provided and not required
+        if (!value) {
+          continue;
+        }
+
+        // Length validation
         if (rules.isLength) {
           const { min, max } = rules.isLength;
           if (min && value.length < min) {
             return res.status(400).json({
               error: true,
-              message: `${field} alanı en az ${min} karakter olmalı`,
+              message: `${field} must be at least ${min} characters long`,
               field
             });
           }
           if (max && value.length > max) {
             return res.status(400).json({
               error: true,
-              message: `${field} alanı en fazla ${max} karakter olmalı`,
+              message: `${field} cannot exceed ${max} characters`,
               field
             });
           }
         }
 
-        // Regex kontrolü
+        // Pattern validation
         if (rules.matches && !rules.matches.test(value)) {
           return res.status(400).json({
             error: true,
-            message: `${field} alanı geçerli formatta değil`,
+            message: `${field} format is invalid`,
             field
           });
         }
 
-        // Email kontrolü
+        // Email validation
         if (rules.isEmail && !isValidEmail(value)) {
           return res.status(400).json({
             error: true,
-            message: `Geçerli bir email adresi giriniz`,
+            message: `Please provide a valid email address`,
             field
           });
         }
@@ -59,16 +64,16 @@ const validate = (validations: ValidationRules) => {
 
       next();
     } catch (error) {
-      logger.error('Validasyon hatası:', error);
+      logger.error('Validation error:', error);
       res.status(500).json({
         error: true,
-        message: 'Validasyon işlemi sırasında bir hata oluştu'
+        message: 'An error occurred during validation'
       });
     }
   };
 };
 
-// Email validasyonu için yardımcı fonksiyon
+// Helper function for email validation
 const isValidEmail = (email: string): boolean => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);

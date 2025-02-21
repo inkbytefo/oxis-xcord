@@ -8,8 +8,8 @@ ServerMember.init({
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'Servers',
-      key: 'id'
+      model: 'servers',
+      key: 'server_id'
     },
     onUpdate: 'CASCADE',
     onDelete: 'CASCADE'
@@ -18,8 +18,8 @@ ServerMember.init({
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'Users',
-      key: 'id'
+      model: 'users',
+      key: 'user_id'
     },
     onUpdate: 'CASCADE',
     onDelete: 'CASCADE'
@@ -28,11 +28,20 @@ ServerMember.init({
     type: DataTypes.STRING,
     allowNull: false,
     defaultValue: 'member'
+  },
+  created_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+  },
+  updated_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
   }
 }, {
   sequelize,
   modelName: 'ServerMember',
-  timestamps: true,
+  tableName: 'server_members',
+  timestamps: false,
   indexes: [
     {
       unique: true,

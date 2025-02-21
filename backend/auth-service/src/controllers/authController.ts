@@ -3,27 +3,27 @@ import bcrypt from 'bcrypt';
 import { User, ServiceError } from '../types';
 import * as db from '../config/database';
 import { logger } from '../utils/logger';
-import { generateAccessToken, generateRefreshToken } from '../config/jwt';
+import { generateAccessToken, generateRefreshToken, verifyToken } from '../config/jwt';
 
 export const register = async (req: Request, res: Response) => {
   try {
     const { username, email, password }: { username: string; email: string; password: string } = req.body;
 
-    // Kullanıcı var mı kontrol et
+    // Check if user exists
     const userExists = await db.query<User>(
       'SELECT * FROM users WHERE username = $1 OR email = $2',
       [username, email]
     );
 
     if (userExists.rows.length > 0) {
-      return res.status(400).json({ message: 'Kullanıcı zaten mevcut' });
+      return res.status(400).json({ message: 'User already exists' });
     }
 
-    // Şifreyi hashle
+    // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Kullanıcıyı kaydet
+    // Save user
     const result = await db.query<User>(
       'INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id',
       [username, email, hashedPassword]
@@ -33,17 +33,17 @@ export const register = async (req: Request, res: Response) => {
     const accessToken = generateAccessToken({ id: userId });
     const refreshToken = generateRefreshToken({ id: userId });
 
-    logger.info(`Yeni kullanıcı kaydedildi: ${username}`);
+    logger.info(`New user registered: ${username}`);
 
     res.status(201).json({
-      message: 'Kullanıcı başarıyla oluşturuldu',
+      message: 'User created successfully',
       accessToken,
       refreshToken
     });
   } catch (error) {
-    logger.error('Kayıt işlemi sırasında hata:', error);
+    logger.error('Error during registration:', error);
     const serviceError = error as ServiceError;
-    res.status(serviceError.statusCode || 500).json({ message: 'Sunucu hatası' });
+    res.status(serviceError.statusCode || 500).json({ message: 'Server error' });
   }
 };
 
@@ -51,35 +51,35 @@ export const login = async (req: Request, res: Response) => {
   try {
     const { email, password }: { email: string; password: string } = req.body;
 
-    // Kullanıcıyı bul
+    // Find user
     const result = await db.query<User>(
       'SELECT * FROM users WHERE email = $1',
       [email]
     );
 
     if (result.rows.length === 0) {
-      return res.status(401).json({ message: 'Geçersiz kimlik bilgileri' });
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     const user = result.rows[0];
 
-    // Şifreyi kontrol et
+    // Check password
     const validPassword = await bcrypt.compare(password, user.password_hash || '');
     if (!validPassword) {
-      return res.status(401).json({ message: 'Geçersiz kimlik bilgileri' });
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Token'ları oluştur
+    // Generate tokens
     const accessToken = generateAccessToken({ id: user.id });
     const refreshToken = generateRefreshToken({ id: user.id });
 
-    // Son giriş zamanını güncelle
+    // Update last login time
     await db.query(
       'UPDATE users SET last_login = NOW() WHERE id = $1',
       [user.id]
     );
 
-    logger.info(`Kullanıcı giriş yaptı: ${user.username}`);
+    logger.info(`User logged in: ${user.username}`);
 
     res.json({
       accessToken,
@@ -91,33 +91,38 @@ export const login = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    logger.error('Giriş işlemi sırasında hata:', error);
+    logger.error('Error during login:', error);
     const serviceError = error as ServiceError;
-    res.status(serviceError.statusCode || 500).json({ message: 'Sunucu hatası' });
+    res.status(serviceError.statusCode || 500).json({ message: 'Server error' });
   }
 };
 
 export const refreshToken = async (req: Request, res: Response) => {
   try {
-    const { refreshToken } = req.body;
-    if (!refreshToken) {
-      return res.status(401).json({ message: 'Refresh token gerekli' });
+    const { refreshToken: token } = req.body;
+    if (!token) {
+      return res.status(401).json({ message: 'Refresh token required' });
     }
 
-    const decoded = generateAccessToken({ id: refreshToken });
-    res.json({ accessToken: decoded });
+    // Verify the refresh token
+    const decoded = verifyToken(token, process.env.JWT_REFRESH_SECRET!);
+    
+    // Generate new access token
+    const accessToken = generateAccessToken({ id: decoded.id });
+    
+    res.json({ accessToken });
   } catch (error) {
-    logger.error('Token yenileme sırasında hata:', error);
-    res.status(401).json({ message: 'Geçersiz refresh token' });
+    logger.error('Error refreshing token:', error);
+    res.status(401).json({ message: 'Invalid refresh token' });
   }
 };
 
 export const logout = async (req: Request, res: Response) => {
   try {
-    // Client tarafında token'ları temizlemek yeterli
-    res.json({ message: 'Başarıyla çıkış yapıldı' });
+    // Token cleanup is handled client-side
+    res.json({ message: 'Logged out successfully' });
   } catch (error) {
-    logger.error('Çıkış işlemi sırasında hata:', error);
-    res.status(500).json({ message: 'Sunucu hatası' });
+    logger.error('Error during logout:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 };

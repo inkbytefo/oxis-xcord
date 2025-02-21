@@ -1,7 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { AuthRequest, TokenPayload } from '../types/index.js';
-import { logger } from '../utils/logger.js';
+import { TokenExpiredError, JsonWebTokenError } from 'jsonwebtoken';
+import { AuthRequest, TokenPayload } from '../types';
+import { logger } from '../utils/logger';
+import { verifyToken } from '../config/jwt';
+
+// Validate required environment variables
+const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
+if (!ACCESS_SECRET) {
+  logger.error('Missing JWT_ACCESS_SECRET environment variable');
+  throw new Error('JWT_ACCESS_SECRET must be defined in environment variables');
+}
 
 export const authenticate = (
   req: AuthRequest,
@@ -27,18 +35,15 @@ export const authenticate = (
       });
     }
 
-    // Verify token
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_ACCESS_SECRET!
-    ) as TokenPayload;
+    // Verify token using centralized JWT utilities
+    const decoded = verifyToken(token, ACCESS_SECRET);
     
     // Add user info to request object
     req.user = decoded;
 
     next();
   } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
+    if (error instanceof TokenExpiredError) {
       logger.warn('Expired token access attempt');
       return res.status(401).json({
         error: true,
@@ -46,7 +51,7 @@ export const authenticate = (
       });
     }
 
-    if (error instanceof jwt.JsonWebTokenError) {
+    if (error instanceof JsonWebTokenError) {
       logger.warn('Invalid token access attempt');
       return res.status(401).json({
         error: true,

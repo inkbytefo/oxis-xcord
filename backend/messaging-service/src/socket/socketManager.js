@@ -1,13 +1,15 @@
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import { EventEmitter } from 'events';
 import config from '../config.js';
 import { logger } from '../utils/logger.js';
 import { getRedisConnection } from '../utils/redis.js';
 
 const redis = getRedisConnection();
 
-class SocketManager {
+class SocketManager extends EventEmitter {
   constructor(server) {
+    super();
     this.io = new Server(server, {
       cors: {
         origin: config.corsOrigin,
@@ -50,22 +52,13 @@ class SocketManager {
 
   setupEventHandlers() {
     this.io.on('connection', (socket) => {
-      this.handleConnection(socket);
-
-      socket.on('join-room', (roomId) => this.handleJoinRoom(socket, roomId));
-      socket.on('leave-room', (roomId) => this.handleLeaveRoom(socket, roomId));
-      socket.on('send-message', (data) => this.handleSendMessage(socket, data));
-      socket.on('typing', (data) => this.handleTyping(socket, data));
-      socket.on('disconnect', () => this.handleDisconnect(socket));
+      this.emit('connection');
       
-      // Bağlantı hatası durumunda cleanup
-      socket.on('error', (error) => {
-        logger.error('Socket hatası:', error);
-        this.handleDisconnect(socket);
+      socket.on('disconnect', () => {
+        this.emit('disconnect');
       });
     });
   }
-
   async handleConnection(socket) {
     const userId = socket.user.id;
     try {

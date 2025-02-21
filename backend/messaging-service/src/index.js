@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import SocketManager from './socket/socketManager.js';
 import config from './config.js';
 import prometheus from 'prom-client';
-import logger, { loggerMiddleware } from './utils/logger.js';
+import { logger, loggerMiddleware } from './utils/logger.js';
 
 // Prometheus metriklerini ayarla
 const collectDefaultMetrics = prometheus.collectDefaultMetrics;
